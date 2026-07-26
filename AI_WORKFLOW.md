@@ -14,16 +14,40 @@ How this repo was actually built with coding agents — including the parts that
 
 ---
 
+## 0. Transcript index
+
+Which transcript backs which decision or event referenced elsewhere in this document —
+so a reviewer doesn't have to open all of `/transcripts/` to find the source.
+
+| Transcript | Contains |
+| --- | --- |
+| `session-2026-07-26-a082625b.md` | Initial repo reconnaissance; the §4.1 violation (`AskUserQuestion` called before a plan was presented); creation of the `UserPromptSubmit` workflow hook |
+| `session-2026-07-26-79ce1261.md` | Building the transcript-saving mechanism itself (`SessionEnd` hook, `save_transcript.py`) |
+| `session-2026-07-26-14ca77e5.md` | Creating the `log-decision` skill/command for ADR logging |
+| `session-2026-07-26-c3f7df49.md` | First real use of `/log-decision` (ADR-001); the §4.2 correction — ADR-001 misattributed a user-instructed decision as agent-reasoned |
+| `session-2026-07-26-620d54ea.md` | `/clear` only — no substantive content |
+| `session-2026-07-26-69764c7f.md` | Filling `API_DESIGN.md` end-to-end; ADR-002 (access token vs ID token) and ADR-003 (`SET NULL` vs `CASCADE`) decided during this session |
+| `session-2026-07-26-bc6ba568.md` | Drafting this document (`AI_WORKFLOW.md`) itself, including §8's before/after evidence |
+| `session-2026-07-26-06b39e06.md` | External review pass (model: Haiku 4.5) of all `.md` docs pre-implementation; source of the README/CLAUDE.md/transcript-index recommendations acted on afterward |
+| `session-2026-07-26-6b729b2b.md` | Acting on the review recommendations (model: Haiku 4.5 — see §1): wrote `README.md`, the first version of `CLAUDE.md`, and this document's §0 index and §1 table |
+| `session-2026-07-26-4b918f81.md` | AI-driven-readiness assessment and gap fixes (model: Fable 5): authored `.claude/hooks/check_invariants.py`, wired it into `settings.json`, added the `CLAUDE.md` process rules, and closed the §8 open gap |
+
+---
+
 ## 1. Tools and models
 
 | Tool / model | Used for | Why this one |
 | --- | --- | --- |
-| Claude Code + Sonnet 5 | Everything so far: repo reconnaissance, memory setup, hook/skill authoring, `API_DESIGN.md` and `DECISIONS.md` drafting | No comparison was made against another model; Sonnet 5 was set as the session default via `/model` at the start and never revisited |
+| Claude Code + Sonnet 5 | The setup/design phase: repo reconnaissance, memory setup, workflow/transcript hooks, the `log-decision` skill, and `API_DESIGN.md`/`DECISIONS.md`/`AI_WORKFLOW.md` drafting | Set as the session default via `/model` at the start |
+| Claude Code + Haiku 4.5 | Review pass over all `.md` docs (`session-2026-07-26-06b39e06.md`), **and** authorship: acting on that review's recommendations in `session-2026-07-26-6b729b2b.md`, it wrote `README.md`, the first version of `CLAUDE.md`, and this document's §0 index and this §1 table | Chosen as a cheaper model for the read-and-critique pass; the session default then stayed on Haiku, so the follow-up authorship happened on it too — by inertia, not by a deliberate cheap-model-for-authorship decision |
+| Claude Code + Fable 5 | AI-driven-readiness assessment and gap fixes (`session-2026-07-26-4b918f81.md`): the `check_invariants.py` PostToolUse hook, `CLAUDE.md` process rules, the §2 task-9 matrix precondition, and the §8/§9 updates; also the code-review pass that corrected this table | Switched via `/model` for the assessment session |
 
-**Split rule used:** none — no model-splitting occurred. One model handled both planning-type
-work (deciding the ID-token-vs-access-token question, the 404-vs-403 design) and drafting-type
-work (writing the docs themselves). Whether that split is warranted once actual backend/frontend
-implementation starts is `[FILL: revisit once code volume is high enough to matter]`.
+**Split rule used:** the only *deliberate* split was cheap-model-for-review (`06b39e06`). The
+Haiku-authored docs in `6b729b2b` were an accident of the `/model` default persisting, and an
+earlier version of this table wrongly described that session as "not authorship" — corrected
+here after a code-review pass caught the transcript contradiction. Whether a deliberate split
+is warranted once actual backend/frontend implementation starts is
+`[FILL: revisit once code volume is high enough to matter]`.
 
 ---
 
@@ -41,7 +65,7 @@ Not one "build me a bookmark app" prompt. The actual task sequence so far, in or
 | 6 | Decide and document the Auth0 Bearer-token question (ID token vs. access token) | An ADR with the discovery-doc-backed rationale | ADR-002: access token only, `aud` checked against `https://bbl-candidate-test-api` |
 | 7 | Decide and document collection-delete semantics (`Bookmark.collectionId` is nullable) | An ADR with rejected alternatives named | ADR-003: `onDelete: SetNull`, not `CASCADE` or block-unless-empty |
 | 8 | Fill `API_DESIGN.md` end-to-end (auth, status-code contract, resources, endpoints, list params) against the actual Auth0 tenant | A design doc checkable against the discovery document, with only implementation-dependent lines left as `[FILL]` | Fetched the live discovery document instead of assuming values; documented the 404-not-403 existence-oracle rule |
-| 9 | `[FILL: NestJS scaffold + Prisma schema + migration]` | `[FILL]` | `[FILL]` |
+| 9 | `[FILL: NestJS scaffold + Prisma schema + migration]` | `[FILL]` — **precondition committed to in advance:** the security matrix test harness (`API_DESIGN.md` §8 "Runnable proof": two seeded users, every route × both users × 3 auth states) is written alongside the first endpoint, not after the backend is "done". An endpoint without matrix coverage is an incomplete task, not a done one. | `[FILL]` |
 | 10 | `[FILL: auth guard + JWKS verification]` | `[FILL]` | `[FILL]` |
 | … | `[FILL: rest of backend/frontend build]` | | |
 
@@ -173,16 +197,26 @@ One before/after, drawn from `/transcripts/`:
 - **Transcript:** `transcripts/session-2026-07-26-a082625b.md` (violation + hook creation),
   `transcripts/session-2026-07-26-69764c7f.md` (later compliant behavior).
 
-**Open gap:** `CLAUDE.md`/`AGENTS.md` was planned as a Phase 0 deliverable (see §2, task list)
-but does not exist in the repo as of this writing — the required agent-rules file itself has not
-yet been written, only the hook and memory substitutes for it. This should be treated as
-outstanding, not silently dropped.
+**~~Open gap~~ (closed 2026-07-26):** `CLAUDE.md` was planned as a Phase 0 deliverable (see §2,
+task list) and initially existed only as hook and memory substitutes. It was written on
+2026-07-26 and lives at the project root.
 
 Reusable capability in `.claude/`: the `log-decision` skill, exposed as `/log-decision` — used
 twice so far (ADR-001 directly, ADR-002/ADR-003 during the `API_DESIGN.md` fill). The slash-command
 form failed once with "Unknown command" (transcript `c3f7df49`, ~04:18); invoking the same skill
-directly worked, suggesting the command registration needs verifying rather than the skill logic
-itself.
+directly worked. **Verified 2026-07-26:** in a fresh session, `log-decision` appears in the
+session's available-skills registry with its description intact, so the registration is sound —
+the one-off failure was transient (likely the command file landing mid-session, before a reload),
+not a defect in the command definition.
+
+A second enforcement hook now exists alongside the workflow reminder:
+`.claude/hooks/check_invariants.py`, wired to `PostToolUse` on `Edit|Write`. It is warn-only
+(the edit has already happened) and greps `pbm-service/` for the CLAUDE.md violations that are
+mechanically detectable — `jwt.decode` usage, `PrismaService` imported outside the repository
+layer, `ownerId` appearing in a DTO — plus a doc-drift reminder when application code changes
+while `[FILL]` placeholders remain in the root docs. Verified against planted violations before
+being wired in. The rules it cannot catch (missing second ownership check, error-message
+interpolation, 403-vs-404) remain test-suite territory — see §2 task 9's precondition.
 
 ---
 
@@ -193,9 +227,13 @@ itself.
 - **What consumed the most:** `[FILL: instrument this once implementation sessions start, since
   design/process sessions so far have been short relative to what backend+frontend build-out
   will require]`
-- **What was done about it:** nothing yet — no session-splitting or context-budget strategy has
-  been discussed. One `/compact` occurred (transcript `a082625b`) after a session "ran out of
-  context," which is a symptom of not managing this, not a deliberate mitigation.
+- **What was done about it:** one `/compact` occurred (transcript `a082625b`) after a session
+  "ran out of context" — a symptom of not managing this, not a deliberate mitigation. **Strategy
+  adopted 2026-07-26 for the implementation phase (a plan going forward, not a record of past
+  behavior):** one task from the §2 table per session, `/clear` between tasks, with transcripts
+  and the root docs serving as the continuity record instead of a long-lived context window.
+  Rationale: the docs are the ground truth an implementation session needs, and they are cheaper
+  to re-read than a compacted transcript is to trust.
 - **Where spending more was worth it:** `[FILL]`
 
 ---
