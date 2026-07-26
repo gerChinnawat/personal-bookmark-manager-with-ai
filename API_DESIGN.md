@@ -219,7 +219,7 @@ Four independent layers. Any one of them failing alone does not breach the invar
 | # | Layer | Mechanism | Proof |
 | --- | --- | --- | --- |
 | 1 | Authentication | global deny-by-default guard; `ownerId` from verified `sub` only | `[FILL: test path, once written]` |
-| 2 | Data access | every Prisma call lives in a repository layer (`[FILL: path, e.g. src/*/repository, once scaffolded]`); every method takes `ownerId` as its first parameter and includes it in `where`. Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries (`PrismaService` is only provided to repository classes, not exported from the Prisma module) | `[FILL: once implemented]` |
+| 2 | Data access | every Prisma call lives in a repository layer (`pbm-service/src/database/<entity>/<entity>.repository.ts`, one per model); every method takes `ownerId` as its first parameter and includes it in `where`. Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries: `PrismaService` (`pbm-service/src/database/prisma.service.ts`) is provided by `PrismaModule` (`pbm-service/src/database/prisma.module.ts`) and not exported from it; only repository classes registered in that same module are exported | `[FILL: once a repository + its test exist]` |
 | 3 | Write validation | `ownerId` is not a field on any inbound DTO, so it cannot be assigned by a client regardless of body content; referenced `collectionId` is ownership-checked before use | `[FILL: once implemented]` |
 | 4 | Response policy | uniform 404, fixed error strings, no cross-owner values in messages | `[FILL: once implemented]` |
 

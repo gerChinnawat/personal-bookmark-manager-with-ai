@@ -4,9 +4,11 @@ A personal bookmark manager: users authenticate via Auth0 and manage
 private collections of bookmarks. No user can read, list, or infer the existence of another
 user's data.
 
-> **Status:** design and process scaffolding only. `pbm-service/` and `pbm-ui/` are empty —
-> no backend or frontend code has been written yet. This README documents the intended stack
-> and structure; it will be corrected as implementation lands if anything changes.
+> **Status:** `pbm-service/` has a NestJS scaffold with Prisma wired as the ORM (multi-file
+> schema under `pbm-service/prisma/schema/`, `PrismaService`/`PrismaModule` in
+> `src/database/`, not yet exporting `PrismaService` to anything but the repository layer).
+> No domain models, endpoints, or auth guard exist yet. `pbm-ui/` is still empty. This README
+> is corrected as implementation lands if anything changes.
 
 ## Stack
 
@@ -35,7 +37,16 @@ transcripts/   Raw session logs (auto-saved via .claude/hooks/save_transcript.py
 
 ## Running locally
 
-`[FILL: once pbm-service/pbm-ui are scaffolded — install steps, env vars (Auth0 domain/audience/client id), migrate/seed commands, dev server ports.]`
+```
+cd pbm-service
+cp .env.example .env       # DATABASE_URL + Postgres creds
+docker compose up -d       # starts Postgres on $POSTGRES_PORT (default 5432)
+npm install
+npm run db:generate        # prisma generate — currently a no-op stub, no models defined yet
+npm run start:dev
+```
+
+`[FILL: Auth0 domain/audience/client id env vars, migrate/seed commands, dev server port — once auth and the first domain model land.]`
 
 ## Auth0 configuration
 

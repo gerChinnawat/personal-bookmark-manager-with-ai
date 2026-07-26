@@ -59,3 +59,16 @@ Rejected alternatives:
 transaction, so the behavior holds regardless of how the delete is issued.
 
 ---
+
+## ADR-004: Agent process defect — mandatory workflow hook not followed mid-task
+Date: 2026-07-26
+Status: Accepted
+Summary: Claude Sonnet 5 skipped two steps of the mandatory `UserPromptSubmit` workflow (ask-before-proceeding, surface-blockers) while executing the "add Prisma as ORM" task; the hook itself fired correctly.
+
+**Context:** `CLAUDE.md`/`.claude/settings.json` require every non-trivial task to follow plan → to-do list → ask before proceeding → surface blockers before continuing past them → summarize. During the Prisma task, the agent used `AskUserQuestion` once (plumbing-only vs. plumbing+models scope) and then treated that as covering the entire "ask before proceeding" step, running the rest of the task to completion without a further checkpoint. Mid-execution, `npm install` hit a genuine `ERESOLVE` conflict (latest Prisma requires TypeScript ≥5.1; this NestJS 8 repo pins TS ^4.3.5) — a real blocker with a real tradeoff (pin Prisma down vs. upgrade TypeScript across the stack) — and the agent unilaterally chose to pin `prisma@5.22.0`, only explaining the choice after the fact in the closing summary. The user caught this and asked directly why the hook wasn't followed.
+
+**Decision:** Log this as a real process defect attributable to the agent, not to any hook malfunction — the `UserPromptSubmit` hook injected its reminder correctly on every turn; the agent simply didn't re-apply it at the moment a new, consequential decision point appeared mid-execution.
+
+**Consequences:** Going forward, a scope-clarifying question answered early in a task does not substitute for pausing again when execution surfaces a new blocker or tradeoff — each such point needs its own explicit surface-and-ask before the agent decides unilaterally and moves on.
+
+---

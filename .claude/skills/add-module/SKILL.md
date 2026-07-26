@@ -90,7 +90,7 @@ export class <PascalName>Repository {
 }
 ```
 
-Then register it in `src/database/database.module.ts` — add the import and add it to both `providers` and `exports`, next to `BookmarkRepository`.
+Then register it in `src/database/prisma.module.ts` — add the import and add it to both `providers` and `exports`, next to `BookmarkRepository`.
 
 ### 3. DTOs — `src/modules/<kebab-name>/dtos/<kebab-name>.dto.ts`
 
@@ -249,20 +249,20 @@ export class <PascalName>Controller {
 
 ```typescript
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../../database/database.module';
+import { PrismaModule } from '../../database/prisma.module';
 import { <PascalName>Controller } from './controllers/<kebab-name>.controller';
 import { <PascalName>Service } from './services/<kebab-name>.service';
 import { <PascalName>Manager } from './managers/<kebab-name>.manager';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [PrismaModule],
   controllers: [<PascalName>Controller],
   providers: [<PascalName>Service, <PascalName>Manager],
 })
 export class <PascalName>Module {}
 ```
 
-Then register it in `src/app.module.ts`: import `<PascalName>Module` and add it to the root `imports` array, next to `DatabaseModule`.
+Then register it in `src/app.module.ts`: import `<PascalName>Module` and add it to the root `imports` array, next to `PrismaModule`.
 
 ## Verify
 
