@@ -7,8 +7,10 @@ user's data.
 > **Status:** `pbm-service/` has a NestJS scaffold with Prisma wired as the ORM (multi-file
 > schema under `pbm-service/prisma/schema/`, `PrismaService`/`PrismaModule` in
 > `src/database/`, not yet exporting `PrismaService` to anything but the repository layer).
-> No domain models, endpoints, or auth guard exist yet. `pbm-ui/` is still empty. This README
-> is corrected as implementation lands if anything changes.
+> Global auth guard, `Collection`, and `Bookmark` modules exist (full CRUD except `PUT`,
+> cursor/`sort`/`q` list params, and the shared exception filter of §6 — those are still
+> pending). `pbm-ui/` is still empty. This README is corrected as implementation lands if
+> anything changes.
 
 ## Stack
 
@@ -42,7 +44,7 @@ cd pbm-service
 cp .env.example .env       # DATABASE_URL + Postgres creds
 docker compose up -d       # starts Postgres on $POSTGRES_PORT (default 5432)
 npm install
-npm run db:generate        # prisma generate — currently a no-op stub, no models defined yet
+npm run db:generate        # prisma generate
 npm run start:dev
 ```
 

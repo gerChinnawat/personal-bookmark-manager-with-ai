@@ -223,4 +223,131 @@ describe('Security matrix (e2e)', () => {
       expect(res.body.name).toBe('matrix-fixture');
     });
   });
+
+  describe('bookmarks — cross-owner access and collectionId ownership', () => {
+    let tokenA: string;
+    let tokenB: string;
+    let collectionIdA: string;
+    let bookmarkId: string;
+
+    beforeAll(async () => {
+      tokenA = await mint(USER_A);
+      tokenB = await mint(USER_B);
+      const collectionRes = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'bookmark-matrix-fixture' })
+        .expect(201);
+      collectionIdA = collectionRes.body.id;
+
+      const bookmarkRes = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com', title: 'matrix-fixture' })
+        .expect(201);
+      bookmarkId = bookmarkRes.body.id;
+      expect(bookmarkRes.body.ownerId).toBeUndefined(); // never serialised (§3)
+    });
+
+    afterAll(async () => {
+      await http()
+        .delete(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collectionIdA}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('owner can read their own bookmark', async () => {
+      await http()
+        .get(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+    });
+
+    const crossOwnerCases: [string, (id: string, t: string) => request.Test][] = [
+      ['GET', (id, t) => http().get(`/bookmarks/${id}`).set('Authorization', auth(t))],
+      [
+        'PATCH',
+        (id, t) =>
+          http().patch(`/bookmarks/${id}`).set('Authorization', auth(t)).send({ title: 'x' }),
+      ],
+      ['DELETE', (id, t) => http().delete(`/bookmarks/${id}`).set('Authorization', auth(t))],
+    ];
+
+    it.each(crossOwnerCases)(
+      "%s: user B on user A's bookmark → 404 identical to nonexistent id",
+      async (_verb, call) => {
+        const crossOwner = await call(bookmarkId, tokenB);
+        const nonexistent = await call('nonexistent-id', tokenB);
+        expect(crossOwner.status).toBe(404);
+        expect(nonexistent.status).toBe(404);
+        expect(crossOwner.text).toBe(nonexistent.text);
+      },
+    );
+
+    it('ownerId in a request body → 400, never assigned (POST and PATCH)', async () => {
+      await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenB))
+        .send({ url: 'https://example.com', title: 'spoof', ownerId: USER_A })
+        .expect(400);
+      await http()
+        .patch(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA))
+        .send({ ownerId: USER_B })
+        .expect(400);
+    });
+
+    it("user B's list never contains user A's bookmark", async () => {
+      const res = await http()
+        .get('/bookmarks')
+        .set('Authorization', auth(tokenB))
+        .expect(200);
+      expect(res.body.map((b: { id: string }) => b.id)).not.toContain(bookmarkId);
+    });
+
+    // CLAUDE.md rule 5 / API_DESIGN.md §4: a write that references another
+    // row (here, collectionId) must independently check ownership of that
+    // row too, not just the row being written.
+    it("POST /bookmarks with user A's collectionId as user B → 404, not assigned", async () => {
+      await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenB))
+        .send({ url: 'https://example.com', title: 'cross-collection', collectionId: collectionIdA })
+        .expect(404);
+    });
+
+    it("PATCH /bookmarks/:id reassigning to user A's collectionId as user B → 404", async () => {
+      const ownRes = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenB))
+        .send({ url: 'https://example.com', title: 'user-b-bookmark' })
+        .expect(201);
+      await http()
+        .patch(`/bookmarks/${ownRes.body.id}`)
+        .set('Authorization', auth(tokenB))
+        .send({ collectionId: collectionIdA })
+        .expect(404);
+      await http()
+        .delete(`/bookmarks/${ownRes.body.id}`)
+        .set('Authorization', auth(tokenB));
+    });
+
+    it('rejects non-http(s) url schemes with 400', async () => {
+      await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'javascript:alert(1)', title: 'xss' })
+        .expect(400);
+    });
+
+    it('bookmark is intact after all cross-owner attempts', async () => {
+      const res = await http()
+        .get(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      expect(res.body.title).toBe('matrix-fixture');
+    });
+  });
 });
