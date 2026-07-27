@@ -5,7 +5,11 @@ import { CollectionModule } from './collection/collection.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
-  imports: [AuthModule, DatabaseModule, CollectionModule],
+  imports: [
+    AuthModule,
+    DatabaseModule,
+    CollectionModule,
+  ],
   controllers: [HealthController],
   providers: [],
 })
