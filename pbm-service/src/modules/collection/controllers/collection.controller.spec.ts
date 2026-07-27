@@ -3,12 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { CollectionController } from './collection.controller';
 import { CollectionManager } from '../managers/collection.manager';
 import { BookmarkManager } from '../../bookmark/managers/bookmark.manager';
-
-const OWNER_ID = 'auth0|owner';
-
-function makeRes() {
-  return { set: jest.fn() } as unknown as import('express').Response;
-}
+import { OWNER_ID, makeRes } from '../../../test-utils/fixtures';
 
 describe('CollectionController', () => {
   let controller: CollectionController;

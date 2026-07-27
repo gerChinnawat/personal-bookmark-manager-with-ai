@@ -3,8 +3,8 @@ import { NotFoundException } from '@nestjs/common';
 import { BookmarkService } from './bookmark.service';
 import { BookmarkRepository } from '../../../database/bookmark/bookmark.repository';
 import { CollectionRepository } from '../../../database/collection/collection.repository';
-
-const OWNER_ID = 'auth0|owner';
+import { encodeCursor } from '../../../common/pagination/cursor';
+import { OWNER_ID } from '../../../test-utils/fixtures';
 
 function makeBookmark(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -95,7 +95,11 @@ describe('BookmarkService', () => {
         OWNER_ID,
         'col-1',
       );
-      expect(bookmarkRepository.create).toHaveBeenCalled();
+      expect(bookmarkRepository.create).toHaveBeenCalledWith(OWNER_ID, {
+        url: 'https://nestjs.com',
+        title: 'NestJS',
+        collectionId: 'col-1',
+      });
     });
 
     it('throws Collection not found and never creates the bookmark when the collection is not the caller\'s', async () => {
@@ -130,7 +134,13 @@ describe('BookmarkService', () => {
 
       const result = await service.findAll(OWNER_ID, { limit: 25 });
 
-      expect(result.nextCursor).toBeDefined();
+      const lastRow = rows[rows.length - 1];
+      expect(result.nextCursor).toBe(
+        encodeCursor({
+          createdAt: lastRow.createdAt.toISOString(),
+          id: lastRow.id,
+        }),
+      );
     });
 
     it('omits nextCursor when fewer rows than the limit are returned', async () => {

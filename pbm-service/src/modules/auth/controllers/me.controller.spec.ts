@@ -23,6 +23,10 @@ describe('MeController', () => {
   it('passes through undefined email/name rather than inventing values', () => {
     const result = controller.me({ sub: 'auth0|user-a' } as any);
 
+    // Object.keys check first: toEqual alone can't tell "key present with an
+    // undefined value" apart from "key absent entirely" (Jest treats both as
+    // equal), so this pins down the actual shape before checking the values.
+    expect(Object.keys(result).sort()).toEqual(['email', 'name', 'sub']);
     expect(result).toEqual({
       sub: 'auth0|user-a',
       email: undefined,

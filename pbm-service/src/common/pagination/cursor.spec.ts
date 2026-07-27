@@ -13,7 +13,10 @@ describe('cursor', () => {
   });
 
   describe('decodeCursor', () => {
-    it('rejects a non-base64/non-JSON cursor', () => {
+    // Buffer.from(str, 'base64') is lenient and never throws on invalid
+    // characters, so this rejects via the same path as the malformed-JSON
+    // cases below: the garbage decoded bytes fail JSON.parse.
+    it('rejects a garbage string whose decoded bytes are not valid JSON', () => {
       expect(() => decodeCursor('not-a-valid-cursor!!!')).toThrow(
         new BadRequestException('Invalid cursor'),
       );

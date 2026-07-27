@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectionManager } from './collection.manager';
 import { CollectionService } from '../services/collection.service';
-
-const OWNER_ID = 'auth0|owner';
+import { OWNER_ID } from '../../../test-utils/fixtures';
 
 describe('CollectionManager', () => {
   let manager: CollectionManager;

@@ -52,12 +52,15 @@ describe('ResponseEnvelopeInterceptor', () => {
 
   it('leaves a 204 No Content response body untouched', async () => {
     const context = makeContext('DELETE', HttpStatus.NO_CONTENT);
-    const handler = makeHandler(undefined);
+    // A defined sentinel, not undefined: proves the value is passed through
+    // as-is rather than the 204 branch simply hardcoding a return of
+    // undefined regardless of what the handler emitted.
+    const handler = makeHandler({ sentinel: 'unwrapped' });
 
     const result = await new Promise((resolve) =>
       interceptor.intercept(context, handler).subscribe(resolve),
     );
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ sentinel: 'unwrapped' });
   });
 });

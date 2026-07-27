@@ -1,12 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BookmarkController } from './bookmark.controller';
 import { BookmarkManager } from '../managers/bookmark.manager';
-
-const OWNER_ID = 'auth0|owner';
-
-function makeRes() {
-  return { set: jest.fn() } as unknown as import('express').Response;
-}
+import { OWNER_ID, makeRes } from '../../../test-utils/fixtures';
 
 describe('BookmarkController', () => {
   let controller: BookmarkController;

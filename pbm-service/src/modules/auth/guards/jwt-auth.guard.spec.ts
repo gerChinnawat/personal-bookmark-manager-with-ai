@@ -1,15 +1,18 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn().mockReturnValue(jest.fn()),
+  createRemoteJWKSet: jest.fn(),
   jwtVerify: jest.fn(),
 }));
 
 const mockedJwtVerify = jwtVerify as jest.Mock;
+// Returns a distinct object per call so tests can prove jwtVerify was
+// called with *this guard's* JWKS, not just some truthy value.
+const mockedCreateRemoteJWKSet = createRemoteJWKSet as jest.Mock;
 
 const ENV = {
   AUTH0_ISSUER: 'https://dev-test.us.auth0.com/',
@@ -17,10 +20,10 @@ const ENV = {
   AUTH0_JWKS_URI: 'https://dev-test.us.auth0.com/.well-known/jwks.json',
 };
 
-function makeContext(options: {
-  authHeader?: string;
-  isPublic?: boolean;
-}): { context: ExecutionContext; request: Record<string, unknown> } {
+function makeContext(options: { authHeader?: string }): {
+  context: ExecutionContext;
+  request: Record<string, unknown>;
+} {
   const request: Record<string, unknown> = {
     headers: options.authHeader ? { authorization: options.authHeader } : {},
   };
@@ -38,6 +41,12 @@ describe('JwtAuthGuard', () => {
   beforeEach(() => {
     process.env = { ...originalEnv, ...ENV };
     mockedJwtVerify.mockReset();
+    mockedCreateRemoteJWKSet.mockReset();
+    // A fresh jest.fn() per call: Jest compares functions by reference, so
+    // this lets tests prove jwtVerify received *this* JWKS and not merely
+    // some structurally-similar stand-in (a plain {} would deep-equal any
+    // other empty {} and defeat the point of the assertion).
+    mockedCreateRemoteJWKSet.mockImplementation(() => jest.fn());
   });
 
   afterEach(() => {
@@ -68,6 +77,16 @@ describe('JwtAuthGuard', () => {
       delete process.env.AUTH0_JWKS_URI;
       const reflector = { getAllAndOverride: jest.fn() } as unknown as Reflector;
       expect(() => new JwtAuthGuard(reflector)).toThrow();
+    });
+
+    it('creates the JWKS from the configured URI with a 10-minute cache', () => {
+      makeGuard();
+
+      expect(mockedCreateRemoteJWKSet).toHaveBeenCalledTimes(1);
+      const [uriArg, optionsArg] = mockedCreateRemoteJWKSet.mock.calls[0];
+      expect(uriArg).toBeInstanceOf(URL);
+      expect((uriArg as URL).href).toBe(ENV.AUTH0_JWKS_URI);
+      expect(optionsArg).toEqual({ cacheMaxAge: 10 * 60 * 1000 });
     });
   });
 
@@ -156,22 +175,19 @@ describe('JwtAuthGuard', () => {
       );
     });
 
-    it('verifies against the configured issuer, audience, and RS256 only', async () => {
+    it("verifies against the configured issuer, audience, RS256, and this guard's own JWKS", async () => {
       const guard = makeGuard();
+      const jwks = mockedCreateRemoteJWKSet.mock.results[0].value;
       const { context } = makeContext({ authHeader: 'Bearer sometoken' });
       mockedJwtVerify.mockResolvedValue({ payload: { sub: 'auth0|user-a' } });
 
       await guard.canActivate(context);
 
-      expect(mockedJwtVerify).toHaveBeenCalledWith(
-        'sometoken',
-        expect.anything(),
-        {
-          issuer: ENV.AUTH0_ISSUER,
-          audience: ENV.AUTH0_AUDIENCE,
-          algorithms: ['RS256'],
-        },
-      );
+      expect(mockedJwtVerify).toHaveBeenCalledWith('sometoken', jwks, {
+        issuer: ENV.AUTH0_ISSUER,
+        audience: ENV.AUTH0_AUDIENCE,
+        algorithms: ['RS256'],
+      });
     });
 
     it('attaches the verified payload to request.user and allows the request through', async () => {
