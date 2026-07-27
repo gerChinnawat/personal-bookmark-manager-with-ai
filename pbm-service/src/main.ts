@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './modules/app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { validationExceptionFactory } from './common/filters/validation-exception-factory';
@@ -18,6 +19,21 @@ async function bootstrap() {
       exceptionFactory: validationExceptionFactory,
     }),
   );
+
+  // Docs only — every route still goes through the global auth guard, so
+  // "Authorize" in the UI needs a real access token (API_DESIGN.md §1).
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Personal Bookmark Manager API')
+    .setDescription('See API_DESIGN.md at the repo root for the full contract.')
+    .setVersion('0.0.1')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
+    .build();
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDocument);
+
   await app.listen(3000);
 }
 bootstrap();

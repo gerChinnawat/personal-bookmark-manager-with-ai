@@ -1,7 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUserClaims } from '../decorators/current-user-claims.decorator';
 import { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 
+@ApiTags('me')
+@ApiBearerAuth('access-token')
 @Controller('me')
 export class MeController {
   // Claims only — no DB lookup, no upsert. There is no separate Users

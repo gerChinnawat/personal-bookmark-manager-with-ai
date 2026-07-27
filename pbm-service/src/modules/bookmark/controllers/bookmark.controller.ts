@@ -11,11 +11,14 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { BookmarkManager } from '../managers/bookmark.manager';
 import { CreateBookmarkDto, UpdateBookmarkDto } from '../dtos/bookmark.dto';
 import { BookmarkListQueryDto } from '../../../common/dtos/list-query.dto';
 
+@ApiTags('bookmarks')
+@ApiBearerAuth('access-token')
 @Controller('bookmarks')
 export class BookmarkController {
   constructor(private readonly bookmarkManager: BookmarkManager) {}

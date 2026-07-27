@@ -11,8 +11,9 @@ user's data.
 > `PUT` (full replace — omitted optional fields are nulled, not left untouched); list routes
 > support `limit`/`cursor`/`sort`/`q`, plus `collectionId`/`uncategorised` on bookmarks;
 > `GET /me` and `GET /collections/:id/bookmarks` are implemented; the shared exception filter
-> of §6 is wired globally. `pbm-ui/` is still empty. This README is corrected as
-> implementation lands if anything changes.
+> of §6 is wired globally. Swagger/OpenAPI docs are served at `GET /docs`, and `npm run
+> db:seed` seeds two example owners' worth of collections/bookmarks. `pbm-ui/` is still
+> empty. This README is corrected as implementation lands if anything changes.
 
 ## Stack
 
@@ -54,7 +55,18 @@ Auth config lives in `.env` (already present in `.env.example`): `AUTH0_ISSUER`,
 `AUTH0_AUDIENCE`, `AUTH0_JWKS_URI` — the service fails at boot if any is missing rather
 than falling open. Migrations: `npm run db:migrate`. Dev server port: `3000`.
 Security matrix test: `npm run test:security` (Postgres must be up).
-`[FILL: seed command — once seed data for 2+ users exists.]`
+
+Example data: `npm run db:seed` creates two fabricated owners (`auth0|example-user-1`,
+`auth0|example-user-2`, following the `auth0|test-user-a/b` shape used by the security
+matrix), each with two collections and a few bookmarks — enough to exercise pagination,
+filtering, and the cross-owner isolation invariant directly against the DB. These are not
+tied to the real Auth0 test account, so a live login (`candidate@test.com`, below) still
+starts with an empty account.
+
+API docs: Swagger UI is served at `http://localhost:3000/docs` (raw OpenAPI JSON at
+`/docs-json`) once the server is running. Every documented route still goes through the
+real auth guard — use "Authorize" in the UI with a token from `scripts/get-token.mjs` to
+call protected routes from the docs page itself.
 
 ## Auth0 configuration
 

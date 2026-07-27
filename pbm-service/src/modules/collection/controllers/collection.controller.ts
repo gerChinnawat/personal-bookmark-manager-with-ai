@@ -11,6 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { CollectionManager } from '../managers/collection.manager';
 import { BookmarkManager } from '../../bookmark/managers/bookmark.manager';
@@ -23,6 +24,8 @@ import {
   ListQueryDto,
 } from '../../../common/dtos/list-query.dto';
 
+@ApiTags('collections')
+@ApiBearerAuth('access-token')
 @Controller('collections')
 export class CollectionController {
   constructor(

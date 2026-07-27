@@ -21,16 +21,19 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:security": "jest --config ./test/jest-e2e.json security-matrix",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "prisma": {
-    "schema": "prisma/schema"
+    "schema": "prisma/schema",
+    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^8.0.0",
     "@nestjs/core": "^8.0.0",
     "@nestjs/mapped-types": "^1.2.2",
     "@nestjs/platform-express": "^8.0.0",
+    "@nestjs/swagger": "^5.2.1",
     "@prisma/client": "^5.22.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
@@ -38,7 +41,8 @@
     "jose": "^4.15.9",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
-    "rxjs": "^7.2.0"
+    "rxjs": "^7.2.0",
+    "swagger-ui-express": "^4.6.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^8.0.0",

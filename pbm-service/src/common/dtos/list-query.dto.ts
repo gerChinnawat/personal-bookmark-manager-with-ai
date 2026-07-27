@@ -1,4 +1,5 @@
 import { Transform, Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsIn,
@@ -26,6 +27,11 @@ export class ListQueryDto {
   // Query params arrive as strings; @Type coerces before @IsInt/@Min/@Max
   // run, so a non-numeric or out-of-range value is rejected for the right
   // reason instead of failing @IsInt on a raw string.
+  @ApiPropertyOptional({
+    default: DEFAULT_LIMIT,
+    maximum: MAX_LIMIT,
+    minimum: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -33,10 +39,14 @@ export class ListQueryDto {
   @Max(MAX_LIMIT)
   limit?: number = DEFAULT_LIMIT;
 
+  @ApiPropertyOptional({
+    description: 'Opaque pagination cursor from X-Next-Cursor.',
+  })
   @IsOptional()
   @IsString()
   cursor?: string;
 
+  @ApiPropertyOptional({ enum: SORT_VALUES, default: DEFAULT_SORT })
   @IsOptional()
   @IsIn(SORT_VALUES)
   sort?: SortValue = DEFAULT_SORT;
@@ -44,12 +54,14 @@ export class ListQueryDto {
   // Applies to every list route (API_DESIGN.md §5): substring match against
   // title+notes for bookmarks, name-only for collections (which have no
   // notes field) — see each repository's findAll for the field mapping.
+  @ApiPropertyOptional({ description: 'Substring search.' })
   @IsOptional()
   @IsString()
   q?: string;
 }
 
 export class BookmarkListQueryDto extends ListQueryDto {
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   collectionId?: string;
@@ -57,6 +69,7 @@ export class BookmarkListQueryDto extends ListQueryDto {
   // Query-string "null" is ambiguous between the string "null" and "absent"
   // (API_DESIGN.md §5), so this is a separate boolean flag rather than
   // overloading collectionId=null.
+  @ApiPropertyOptional({ default: false })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
