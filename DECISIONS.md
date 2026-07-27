@@ -98,3 +98,16 @@ Summary: Claude Sonnet 5 again skipped the mandatory plan → to-do list → ask
 **Consequences:** This is the second logged instance of the same failure mode (see ADR-004). Going forward, the agent should treat discovering unexpected state mid-task (like a file already moved outside its own actions) as an explicit blocker requiring a pause and confirmation, not a cue to just fix and continue.
 
 ---
+
+## ADR-007: Consolidate session transcript logs into a single root `transcripts/` folder
+Date: 2026-07-27
+Status: Accepted
+Summary: Session logs were landing in per-cwd `transcripts/` subfolders (e.g. `pbm-service/transcripts/`) depending on where a session was launched; user instructed consolidating all of them into one `transcripts/` folder at the repo root.
+
+**Context:** The `SessionEnd` hook (`.claude/hooks/save_transcript.py`) wrote logs to `<cwd>/transcripts`, using the session's working directory at hook time. Sessions launched from `pbm-service/` therefore wrote logs into `pbm-service/transcripts/` instead of the root, scattering session history across the repo.
+
+**Decision:** User-instructed: merge existing logs and fix the hook so all session logs — past and future — live only in `transcripts/` at the repo root. Existing files under `pbm-service/transcripts/*.md` were moved into root `transcripts/` via `git mv`, and the hook was updated to resolve its output directory from `CLAUDE_PROJECT_DIR` (falling back to the payload's `cwd` only if that env var is unset) instead of the session's cwd.
+
+**Consequences:** All future session transcripts land in one place regardless of which directory a session starts in, making history easier to browse and reason about. Any other tooling that assumed per-directory `transcripts/` folders (none currently known) would need updating.
+
+---

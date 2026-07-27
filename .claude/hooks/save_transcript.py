@@ -83,13 +83,13 @@ def main():
     payload = json.load(sys.stdin) if not sys.stdin.isatty() else {}
     transcript_path = payload.get('transcript_path')
     session_id = payload.get('session_id', 'unknown')
-    cwd = payload.get('cwd') or os.getcwd()
+    project_dir = os.environ.get('CLAUDE_PROJECT_DIR') or payload.get('cwd') or os.getcwd()
 
     if not transcript_path or not os.path.isfile(transcript_path):
         print(f"save_transcript: no valid transcript_path in payload", file=sys.stderr)
         return
 
-    out_dir = os.path.join(cwd, 'transcripts')
+    out_dir = os.path.join(project_dir, 'transcripts')
     os.makedirs(out_dir, exist_ok=True)
 
     date_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
