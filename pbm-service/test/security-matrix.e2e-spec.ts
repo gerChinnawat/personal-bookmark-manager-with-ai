@@ -111,7 +111,8 @@ describe('Security matrix (e2e)', () => {
 
   /** Every route Nest registered, as "METHOD /path" + a requestable URL. */
   function registeredRoutes(): { key: string; method: string; url: string }[] {
-    const router = app.getHttpAdapter().getInstance()._router;
+    const instance = app.getHttpAdapter().getInstance();
+    const router = instance.router ?? instance._router;
     const routes: { key: string; method: string; url: string }[] = [];
     for (const layer of router.stack) {
       if (!layer.route) continue;
