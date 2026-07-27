@@ -4,6 +4,7 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -25,9 +26,11 @@ describe('AllExceptionsFilter', () => {
   let filter: AllExceptionsFilter;
 
   beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     filter = new AllExceptionsFilter();
-    jest.spyOn(filter['logger'], 'error').mockImplementation(() => undefined);
   });
+
+  afterEach(() => jest.restoreAllMocks());
 
   it('wraps a 404 NotFoundException with the fixed message and NOT_FOUND code, no details', () => {
     const { host, response } = makeHost();

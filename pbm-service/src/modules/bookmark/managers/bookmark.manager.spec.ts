@@ -1,8 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BookmarkManager } from './bookmark.manager';
 import { BookmarkService } from '../services/bookmark.service';
-
-const OWNER_ID = 'auth0|owner';
+import { OWNER_ID } from '../../../test-utils/fixtures';
 
 describe('BookmarkManager', () => {
   let manager: BookmarkManager;

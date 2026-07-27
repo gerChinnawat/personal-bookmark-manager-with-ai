@@ -3,9 +3,7 @@ import { Prisma } from '@prisma/client';
 import { CollectionRepository } from './collection.repository';
 import { PrismaService } from '../prisma-service/prisma.service';
 import * as cursor from '../../common/pagination/cursor';
-
-const OWNER_ID = 'auth0|owner';
-const OTHER_ID = 'auth0|other';
+import { OWNER_ID, OTHER_ID } from '../../test-utils/fixtures';
 
 describe('CollectionRepository', () => {
   let repository: CollectionRepository;

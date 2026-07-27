@@ -1,11 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { BookmarkRepository } from './bookmark.repository';
 import { PrismaService } from '../prisma-service/prisma.service';
 import * as cursor from '../../common/pagination/cursor';
-
-const OWNER_ID = 'auth0|owner';
-const OTHER_ID = 'auth0|other';
+import { OWNER_ID, OTHER_ID } from '../../test-utils/fixtures';
 
 describe('BookmarkRepository', () => {
   let repository: BookmarkRepository;
@@ -19,7 +16,7 @@ describe('BookmarkRepository', () => {
     };
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     prisma = {
       bookmark: {
         create: jest.fn(),
@@ -30,14 +27,7 @@ describe('BookmarkRepository', () => {
       },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        BookmarkRepository,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    repository = module.get(BookmarkRepository);
+    repository = new BookmarkRepository(prisma as unknown as PrismaService);
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -224,6 +214,9 @@ describe('BookmarkRepository', () => {
 
       const result = await repository.findOne(OTHER_ID, '1');
 
+      expect(prisma.bookmark.findFirst).toHaveBeenCalledWith({
+        where: { id: '1', ownerId: OTHER_ID },
+      });
       expect(result).toBeNull();
     });
   });

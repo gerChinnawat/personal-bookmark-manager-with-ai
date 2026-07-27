@@ -2,8 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { CollectionService } from './collection.service';
 import { CollectionRepository } from '../../../database/collection/collection.repository';
-
-const OWNER_ID = 'auth0|owner';
+import { OWNER_ID } from '../../../test-utils/fixtures';
 
 function makeCollection(overrides: Partial<Record<string, unknown>> = {}) {
   return {
