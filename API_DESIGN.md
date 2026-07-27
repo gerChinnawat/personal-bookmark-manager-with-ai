@@ -16,10 +16,10 @@ The contract for the bookmark manager API, and the mechanisms that enforce it.
 | --- | --- |
 | Credential accepted | Auth0 **access token** only, as `Authorization: Bearer <jwt>` |
 | Issuer | `https://dev-yg.us.auth0.com/` (trailing slash — verified against the discovery document) |
-| Audience | `https://bbl-candidate-test-api` |
+| Audience | `https://bbl-candidate-test-api`. **The live token's `aud` is an array** (`["https://bbl-candidate-test-api", "https://dev-yg.us.auth0.com/userinfo"]` — confirmed via a real PKCE flow, 2026-07-27), so the check must accept the audience appearing as a member, not only as a scalar |
 | Signing algorithm | `RS256`, pinned. The `alg` header on the token is never trusted |
 | Key source | JWKS at `https://dev-yg.us.auth0.com/.well-known/jwks.json` (from the discovery document), cached 10 minutes, refetched immediately on an unknown `kid` |
-| Claims verified | signature, `iss`, `aud`, `exp`, `nbf`, `sub` present |
+| Claims verified | signature, `iss`, `aud`, `exp`, `nbf` *when present* (Auth0 does not issue `nbf` on these tokens — confirmed 2026-07-27), `sub` present |
 | Identity | `ownerId` is derived from the verified `sub` claim, and from nothing else |
 
 Rationale for choosing the access token over the ID token: see `DECISIONS.md` ADR-002.
@@ -28,6 +28,13 @@ Rationale for choosing the access token over the ID token: see `DECISIONS.md` AD
 Auth0 application's `client_id`, not `https://bbl-candidate-test-api` — so it legitimately
 fails the `aud` check and returns 401. This is standard OIDC semantics, not an implementation
 quirk. Proof: `[FILL: path to the test, once written]`.
+
+Both claims above were confirmed against live tokens on 2026-07-27: the password grant is
+disabled on this Auth0 client (`unauthorized_client`), so `pbm-service/scripts/get-token.mjs`
+runs a real Authorization Code + PKCE flow and prints the decoded (not verified) header and
+payload of both tokens. The access token's `aud` array and the ID token's client-ID `aud`
+matched the design assumptions exactly. (Finding and the decision to verify via a live flow:
+user-driven; script: agent-written on instruction.)
 
 ### Route protection
 

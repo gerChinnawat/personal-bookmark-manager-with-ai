@@ -31,3 +31,6 @@ Thumbs.db
 # Prisma local dev database
 *.sqlite
 *.sqlite-journal
+
+*-request.json
+*-result.json

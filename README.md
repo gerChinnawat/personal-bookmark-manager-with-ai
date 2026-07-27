@@ -53,3 +53,25 @@ npm run start:dev
 Requests must carry an **access token** (not an ID token) as `Authorization: Bearer <jwt>`,
 requested with `audience: https://bbl-candidate-test-api`. See `API_DESIGN.md` §1 and
 `DECISIONS.md` ADR-002 for why ID tokens are rejected rather than merely unused.
+
+### Getting a token for manual testing
+
+The Auth0 client does **not** allow the password grant (`Grant type 'password' not allowed
+for the client` — verified 2026-07-27), so the only way to mint a token is a real
+Authorization Code + PKCE flow:
+
+```
+cd pbm-service
+node scripts/get-token.mjs   # port 3000 must be free — stop the dev server first
+```
+
+It opens the Auth0 login page (test user: `candidate@test.com`), catches the callback on
+`http://localhost:3000/callback`, and prints both tokens' decoded header/payload plus the
+raw access token for `curl`. The script decodes for inspection only — it never verifies,
+and is not application code.
+
+Confirmed token format from a live run (2026-07-27): access token is a JWT, `RS256`,
+`iss: https://dev-yg.us.auth0.com/` (trailing slash), `sub` present, 2 h expiry, and
+`aud` is an **array** — `["https://bbl-candidate-test-api", "https://dev-yg.us.auth0.com/userinfo"]`.
+No `nbf` claim is issued. The ID token's `aud` is the application client ID, which is why
+it fails the API's audience check (ADR-002).
