@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
-import { IS_PUBLIC_KEY } from './public.decorator';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 // Fixed string only — never interpolate anything from the request or token
 // into the message (API_DESIGN.md §6).

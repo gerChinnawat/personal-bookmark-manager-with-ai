@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { CurrentUser } from '../../auth/current-user.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { CollectionManager } from '../managers/collection.manager';
 import {
   CreateCollectionDto,

@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedRequest } from './jwt-auth.guard';
+import { AuthenticatedRequest } from '../guards/jwt-auth.guard';
 
 // ownerId is the verified JWT's `sub`, set by JwtAuthGuard, and nothing else
 // (CLAUDE.md rule 2). The guard has already rejected any request without a
