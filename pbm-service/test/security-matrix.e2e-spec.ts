@@ -6,6 +6,7 @@ import { exportJWK, generateKeyPair, KeyLike, SignJWT } from 'jose';
 import * as request from 'supertest';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { validationExceptionFactory } from '../src/common/filters/validation-exception-factory';
+import { ResponseEnvelopeInterceptor } from '../src/common/interceptors/response-envelope.interceptor';
 
 // The runnable proof for API_DESIGN.md §8: mints real RS256 tokens against a
 // local JWKS (no live Auth0 dependency), then walks every registered route ×
@@ -79,6 +80,7 @@ describe('Security matrix (e2e)', () => {
     app = moduleFixture.createNestApplication();
     // Mirror main.ts exactly — the matrix must exercise prod behaviour.
     app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -103,7 +105,7 @@ describe('Security matrix (e2e)', () => {
   // nondeterministic field rather than compare raw response text.
   const bodyIgnoringRequestId = (res: request.Response) => {
     const clone = JSON.parse(JSON.stringify(res.body));
-    if (clone?.error?.requestId) delete clone.error.requestId;
+    if (clone?.data?.requestId) delete clone.data.requestId;
     return clone;
   };
 
@@ -161,7 +163,9 @@ describe('Security matrix (e2e)', () => {
 
   describe('public route', () => {
     it('GET /health → 200 with no token', async () => {
-      await http().get('/health').expect(200, { status: 'ok' });
+      await http()
+        .get('/health')
+        .expect(200, { status: true, message: 'OK', data: { status: 'ok' } });
     });
   });
 
@@ -178,9 +182,9 @@ describe('Security matrix (e2e)', () => {
         .set('Authorization', auth(tokenA))
         .send({ name: 'matrix-fixture' })
         .expect(201);
-      collectionId = res.body.id;
+      collectionId = res.body.data.id;
       expect(collectionId).toBeTruthy();
-      expect(res.body.ownerId).toBeUndefined(); // never serialised (§3)
+      expect(res.body.data.ownerId).toBeUndefined(); // never serialised (§3)
     });
 
     afterAll(async () => {
@@ -252,7 +256,7 @@ describe('Security matrix (e2e)', () => {
         .get('/collections')
         .set('Authorization', auth(tokenB))
         .expect(200);
-      expect(res.body.map((c: { id: string }) => c.id)).not.toContain(
+      expect(res.body.data.map((c: { id: string }) => c.id)).not.toContain(
         collectionId,
       );
     });
@@ -262,7 +266,7 @@ describe('Security matrix (e2e)', () => {
         .get(`/collections/${collectionId}`)
         .set('Authorization', auth(tokenA))
         .expect(200);
-      expect(res.body.name).toBe('matrix-fixture');
+      expect(res.body.data.name).toBe('matrix-fixture');
     });
   });
 
@@ -280,15 +284,15 @@ describe('Security matrix (e2e)', () => {
         .set('Authorization', auth(tokenA))
         .send({ name: 'bookmark-matrix-fixture' })
         .expect(201);
-      collectionIdA = collectionRes.body.id;
+      collectionIdA = collectionRes.body.data.id;
 
       const bookmarkRes = await http()
         .post('/bookmarks')
         .set('Authorization', auth(tokenA))
         .send({ url: 'https://example.com', title: 'matrix-fixture' })
         .expect(201);
-      bookmarkId = bookmarkRes.body.id;
-      expect(bookmarkRes.body.ownerId).toBeUndefined(); // never serialised (§3)
+      bookmarkId = bookmarkRes.body.data.id;
+      expect(bookmarkRes.body.data.ownerId).toBeUndefined(); // never serialised (§3)
     });
 
     afterAll(async () => {
@@ -360,7 +364,7 @@ describe('Security matrix (e2e)', () => {
         .get('/bookmarks')
         .set('Authorization', auth(tokenB))
         .expect(200);
-      expect(res.body.map((b: { id: string }) => b.id)).not.toContain(
+      expect(res.body.data.map((b: { id: string }) => b.id)).not.toContain(
         bookmarkId,
       );
     });
@@ -387,12 +391,12 @@ describe('Security matrix (e2e)', () => {
         .send({ url: 'https://example.com', title: 'user-b-bookmark' })
         .expect(201);
       await http()
-        .patch(`/bookmarks/${ownRes.body.id}`)
+        .patch(`/bookmarks/${ownRes.body.data.id}`)
         .set('Authorization', auth(tokenB))
         .send({ collectionId: collectionIdA })
         .expect(404);
       await http()
-        .delete(`/bookmarks/${ownRes.body.id}`)
+        .delete(`/bookmarks/${ownRes.body.data.id}`)
         .set('Authorization', auth(tokenB));
     });
 
@@ -409,7 +413,7 @@ describe('Security matrix (e2e)', () => {
         .get(`/bookmarks/${bookmarkId}`)
         .set('Authorization', auth(tokenA))
         .expect(200);
-      expect(res.body.title).toBe('matrix-fixture');
+      expect(res.body.data.title).toBe('matrix-fixture');
     });
   });
 
@@ -428,24 +432,24 @@ describe('Security matrix (e2e)', () => {
         .expect(201);
 
       await http()
-        .put(`/collections/${created.body.id}`)
+        .put(`/collections/${created.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .send({ name: 'put-replaced' })
         .expect(200);
       const fetched = await http()
-        .get(`/collections/${created.body.id}`)
+        .get(`/collections/${created.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .expect(200);
-      expect(fetched.body.name).toBe('put-replaced');
+      expect(fetched.body.data.name).toBe('put-replaced');
 
       await http()
-        .put(`/collections/${created.body.id}`)
+        .put(`/collections/${created.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .send({})
         .expect(400);
 
       await http()
-        .delete(`/collections/${created.body.id}`)
+        .delete(`/collections/${created.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -462,26 +466,26 @@ describe('Security matrix (e2e)', () => {
           url: 'https://example.com',
           title: 'put-original',
           notes: 'a note',
-          collectionId: collection.body.id,
+          collectionId: collection.body.data.id,
         })
         .expect(201);
-      expect(created.body.notes).toBe('a note');
-      expect(created.body.collectionId).toBe(collection.body.id);
+      expect(created.body.data.notes).toBe('a note');
+      expect(created.body.data.collectionId).toBe(collection.body.data.id);
 
       const replaced = await http()
-        .put(`/bookmarks/${created.body.id}`)
+        .put(`/bookmarks/${created.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .send({ url: 'https://example.com/replaced', title: 'put-replaced' })
         .expect(200);
-      expect(replaced.body.url).toBe('https://example.com/replaced');
-      expect(replaced.body.notes).toBeNull();
-      expect(replaced.body.collectionId).toBeNull();
+      expect(replaced.body.data.url).toBe('https://example.com/replaced');
+      expect(replaced.body.data.notes).toBeNull();
+      expect(replaced.body.data.collectionId).toBeNull();
 
       await http()
-        .delete(`/bookmarks/${created.body.id}`)
+        .delete(`/bookmarks/${created.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/collections/${collection.body.id}`)
+        .delete(`/collections/${collection.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -493,13 +497,13 @@ describe('Security matrix (e2e)', () => {
         .expect(201);
 
       await http()
-        .put(`/bookmarks/${created.body.id}`)
+        .put(`/bookmarks/${created.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .send({ title: 'missing url' })
         .expect(400);
 
       await http()
-        .delete(`/bookmarks/${created.body.id}`)
+        .delete(`/bookmarks/${created.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -517,20 +521,20 @@ describe('Security matrix (e2e)', () => {
         .expect(201);
 
       await http()
-        .put(`/bookmarks/${bookmark.body.id}`)
+        .put(`/bookmarks/${bookmark.body.data.id}`)
         .set('Authorization', auth(tokenA))
         .send({
           url: 'https://example.com',
           title: 'put-cross-collection',
-          collectionId: foreignCollection.body.id,
+          collectionId: foreignCollection.body.data.id,
         })
         .expect(404);
 
       await http()
-        .delete(`/bookmarks/${bookmark.body.id}`)
+        .delete(`/bookmarks/${bookmark.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/collections/${foreignCollection.body.id}`)
+        .delete(`/collections/${foreignCollection.body.data.id}`)
         .set('Authorization', auth(tokenB));
     });
   });
@@ -542,7 +546,7 @@ describe('Security matrix (e2e)', () => {
         .get('/me')
         .set('Authorization', auth(token))
         .expect(200);
-      expect(res.body.sub).toBe(USER_A);
+      expect(res.body.data.sub).toBe(USER_A);
     });
   });
 
@@ -560,7 +564,7 @@ describe('Security matrix (e2e)', () => {
         .set('Authorization', auth(tokenA))
         .send({ name: 'nested-fixture' })
         .expect(201);
-      collectionId = collection.body.id;
+      collectionId = collection.body.data.id;
       const bookmark = await http()
         .post('/bookmarks')
         .set('Authorization', auth(tokenA))
@@ -570,7 +574,7 @@ describe('Security matrix (e2e)', () => {
           collectionId,
         })
         .expect(201);
-      bookmarkId = bookmark.body.id;
+      bookmarkId = bookmark.body.data.id;
     });
 
     afterAll(async () => {
@@ -587,7 +591,7 @@ describe('Security matrix (e2e)', () => {
         .get(`/collections/${collectionId}/bookmarks`)
         .set('Authorization', auth(tokenA))
         .expect(200);
-      expect(res.body.map((b: { id: string }) => b.id)).toContain(bookmarkId);
+      expect(res.body.data.map((b: { id: string }) => b.id)).toContain(bookmarkId);
     });
 
     it("404 when the collection isn't the caller's — not an empty list", async () => {
@@ -649,7 +653,7 @@ describe('Security matrix (e2e)', () => {
           .set('Authorization', auth(tokenA))
           .send({ url: 'https://example.com', title })
           .expect(201);
-        created.push(res.body.id);
+        created.push(res.body.data.id);
       }
 
       const seen: string[] = [];
@@ -664,8 +668,8 @@ describe('Security matrix (e2e)', () => {
           })
           .set('Authorization', auth(tokenA));
         const res = await req.expect(200);
-        expect(res.body.length).toBe(1);
-        seen.push(res.body[0].id);
+        expect(res.body.data.length).toBe(1);
+        seen.push(res.body.data[0].id);
         cursor = res.headers['x-next-cursor'];
       }
       for (const id of created) expect(seen).toContain(id);
@@ -689,7 +693,7 @@ describe('Security matrix (e2e)', () => {
         .send({
           url: 'https://example.com',
           title: 'categorised-bookmark',
-          collectionId: collection.body.id,
+          collectionId: collection.body.data.id,
         })
         .expect(201);
       const uncategorised = await http()
@@ -702,18 +706,18 @@ describe('Security matrix (e2e)', () => {
         .get('/bookmarks?uncategorised=true')
         .set('Authorization', auth(tokenA))
         .expect(200);
-      const ids = res.body.map((b: { id: string }) => b.id);
-      expect(ids).toContain(uncategorised.body.id);
-      expect(ids).not.toContain(categorised.body.id);
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(uncategorised.body.data.id);
+      expect(ids).not.toContain(categorised.body.data.id);
 
       await http()
-        .delete(`/bookmarks/${categorised.body.id}`)
+        .delete(`/bookmarks/${categorised.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/bookmarks/${uncategorised.body.id}`)
+        .delete(`/bookmarks/${uncategorised.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/collections/${collection.body.id}`)
+        .delete(`/collections/${collection.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -737,15 +741,15 @@ describe('Security matrix (e2e)', () => {
         .query({ q: 'distinctive search' })
         .set('Authorization', auth(tokenA))
         .expect(200);
-      const ids = res.body.map((b: { id: string }) => b.id);
-      expect(ids).toContain(match.body.id);
-      expect(ids).not.toContain(noMatch.body.id);
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(match.body.data.id);
+      expect(ids).not.toContain(noMatch.body.data.id);
 
       await http()
-        .delete(`/bookmarks/${match.body.id}`)
+        .delete(`/bookmarks/${match.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/bookmarks/${noMatch.body.id}`)
+        .delete(`/bookmarks/${noMatch.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -766,15 +770,15 @@ describe('Security matrix (e2e)', () => {
         .query({ q: 'distinctive collection' })
         .set('Authorization', auth(tokenA))
         .expect(200);
-      const ids = res.body.map((c: { id: string }) => c.id);
-      expect(ids).toContain(match.body.id);
-      expect(ids).not.toContain(noMatch.body.id);
+      const ids = res.body.data.map((c: { id: string }) => c.id);
+      expect(ids).toContain(match.body.data.id);
+      expect(ids).not.toContain(noMatch.body.data.id);
 
       await http()
-        .delete(`/collections/${match.body.id}`)
+        .delete(`/collections/${match.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/collections/${noMatch.body.id}`)
+        .delete(`/collections/${noMatch.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
 
@@ -791,30 +795,30 @@ describe('Security matrix (e2e)', () => {
         .send({
           url: 'https://example.com',
           title: 'collectionId-filter-bookmark',
-          collectionId: collection.body.id,
+          collectionId: collection.body.data.id,
         })
         .expect(201);
 
       const res = await http()
         .get('/bookmarks')
-        .query({ collectionId: collection.body.id })
+        .query({ collectionId: collection.body.data.id })
         .set('Authorization', auth(tokenA))
         .expect(200);
-      expect(res.body.map((b: { id: string }) => b.id)).toContain(
-        bookmark.body.id,
+      expect(res.body.data.map((b: { id: string }) => b.id)).toContain(
+        bookmark.body.data.id,
       );
 
       await http()
         .get('/bookmarks')
-        .query({ collectionId: collection.body.id })
+        .query({ collectionId: collection.body.data.id })
         .set('Authorization', auth(tokenB))
         .expect(404);
 
       await http()
-        .delete(`/bookmarks/${bookmark.body.id}`)
+        .delete(`/bookmarks/${bookmark.body.data.id}`)
         .set('Authorization', auth(tokenA));
       await http()
-        .delete(`/collections/${collection.body.id}`)
+        .delete(`/collections/${collection.body.data.id}`)
         .set('Authorization', auth(tokenA));
     });
   });

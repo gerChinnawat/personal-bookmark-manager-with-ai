@@ -10,11 +10,12 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { Response } from 'express';
 
-// The single exception filter for API_DESIGN.md §6: every response, success
-// or error, funnels through here so the envelope shape is uniform. `message`
-// is always a fixed string already chosen by the throwing code (services
-// only ever throw with constants, never interpolated values) — this filter
-// does not invent new message text, it only wraps and redacts.
+// The single exception filter for API_DESIGN.md §6: every error response
+// funnels through here so the {status, message, data} envelope shape matches
+// ResponseEnvelopeInterceptor's success-side wrapping. `message` is always a
+// fixed string already chosen by the throwing code (services only ever throw
+// with constants, never interpolated values) — this filter does not invent
+// new message text, it only wraps and redacts.
 
 interface ErrorDetail {
   field: string;
@@ -55,9 +56,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const body = exception.getResponse();
       const { message, details } = this.readBody(body, status);
       response.status(status).json({
-        error: {
+        status: false,
+        message,
+        data: {
           code: CODE_BY_STATUS[status] ?? 'ERROR',
-          message,
           ...(status === HttpStatus.BAD_REQUEST && details ? { details } : {}),
           requestId,
         },
@@ -74,11 +76,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? HttpStatus.CONFLICT
         : HttpStatus.INTERNAL_SERVER_ERROR;
       response.status(status).json({
-        error: {
+        status: false,
+        message: isUniqueViolation
+          ? 'Resource already exists'
+          : INTERNAL_ERROR_MESSAGE,
+        data: {
           code: isUniqueViolation ? 'CONFLICT' : 'INTERNAL_ERROR',
-          message: isUniqueViolation
-            ? 'Resource already exists'
-            : INTERNAL_ERROR_MESSAGE,
           requestId,
         },
       });
@@ -88,9 +91,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Unhandled: stack traces logged, never serialised (API_DESIGN.md §6).
     this.logger.error(exception instanceof Error ? exception.stack : exception);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      error: {
+      status: false,
+      message: INTERNAL_ERROR_MESSAGE,
+      data: {
         code: 'INTERNAL_ERROR',
-        message: INTERNAL_ERROR_MESSAGE,
         requestId,
       },
     });

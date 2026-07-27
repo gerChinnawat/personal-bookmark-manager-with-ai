@@ -111,3 +111,47 @@ Summary: Session logs were landing in per-cwd `transcripts/` subfolders (e.g. `p
 **Consequences:** All future session transcripts land in one place regardless of which directory a session starts in, making history easier to browse and reason about. Any other tooling that assumed per-directory `transcripts/` folders (none currently known) would need updating.
 
 ---
+
+## ADR-008: Unify every response — success and error — into `{status, message, data}`
+Date: 2026-07-27
+Status: Accepted
+Summary: User-instructed: replace the bare-resource-on-success / `{error: {...}}`-on-failure
+contract with one envelope, `{status: boolean, message: string, data: unknown}`, used by
+every response except 204.
+
+**Context:** The original design (`API_DESIGN.md` §2/§6, ADR predates this log) returned a
+bare resource or array on 2xx and a distinct `{error: {code, message, details, requestId}}`
+object on failure — two different top-level shapes a client has to branch on. The user
+explicitly requested a single `{status, message, data}` envelope instead. This is a
+user-instructed contract change, not something the agent judged necessary independently —
+the prior two-shape design was a deliberate, documented decision (§5 in particular argues at
+length for keeping list bodies as bare arrays), and the agent surfaced that conflict via
+`AskUserQuestion` before implementing rather than silently overriding it.
+
+**Decision:** Four sub-decisions, each confirmed with the user before implementation:
+1. **Scope:** both success and error responses adopt the new envelope (not success-only).
+   Error responses fold the old `error.code`/`error.details`/`error.requestId` into
+   `data: {code, details?, requestId}` rather than dropping them.
+2. **Lists:** `data` is the plain array, exactly as the body was before. The `X-Next-Cursor`
+   header keeps carrying pagination — §5's pagination-header rationale is unaffected, only
+   the array's storage location under `data` changed.
+3. **204 deletes:** left untouched — no body, per HTTP spec. Wrapping a 204 would require
+   also changing its status code, which was out of scope for this change.
+4. **Docs and tests move together:** `API_DESIGN.md` §2/§5/§6 and
+   `test/security-matrix.e2e-spec.ts` were updated in the same change — every success-path
+   assertion (`res.body.x` → `res.body.data.x`) and the `bodyIgnoringRequestId` helper
+   (`error.requestId` → `data.requestId`).
+
+Implementation: `pbm-service/src/common/interceptors/response-envelope.interceptor.ts` (new,
+registered globally in `main.ts`) wraps success bodies; `all-exceptions.filter.ts` was
+rewritten to emit the same shape on error.
+
+**Consequences:** Every existing and future controller response goes through the same two
+choke points (one interceptor, one filter), so no controller code needed to change. Any
+future endpoint automatically gets the envelope for free. The cost is that clients must now
+unwrap `data` on every 2xx response instead of reading the body directly, and the
+previously-documented "list responses are a bare array/object, never wrapped" framing in §5
+now means "the array lives at `data`, not at the response root" — a narrower claim than
+before.
+
+---

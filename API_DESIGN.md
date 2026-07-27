@@ -52,17 +52,25 @@ A global guard denies by default. Every route is authenticated unless explicitly
 
 The mapping is uniform across resources. The 404-not-403 rule is the load-bearing one.
 
+Every response body — success or error — is a single envelope,
+`{ status: boolean, message: string, data: unknown }` (see §6). On success, `data` is the
+resource (or array, for list routes); `message` is a fixed per-verb string (`OK`, `Created`,
+`Updated`, `Deleted`). On error, `data` carries `{ code, details?, requestId }` — the same
+information the old bare `error` object carried, just nested one level differently. **204
+stays genuinely bodyless** — a body on 204 violates HTTP semantics, so deletes are the one
+case the envelope does not wrap.
+
 | Situation | Status | Body |
 | --- | --- | --- |
-| Success, resource returned | 200 | resource |
-| Created | 201 | resource, plus `Location` header |
-| Deleted | 204 | empty |
-| No / malformed / expired token | 401 | error envelope, `code: UNAUTHENTICATED` |
-| Valid token, resource belongs to another user | **404** | error envelope, `code: NOT_FOUND` |
-| Valid token, resource does not exist at all | **404** | error envelope, `code: NOT_FOUND` — **byte-identical to the row above** |
-| Body fails validation | 400 | error envelope with field-level detail |
-| Unique constraint violated | 409 | error envelope, `code: CONFLICT` |
-| Unhandled | 500 | error envelope, no internal detail leaked |
+| Success, resource returned | 200 | `{status: true, message, data: resource}` |
+| Created | 201 | `{status: true, message: "Created", data: resource}`, plus `Location` header |
+| Deleted | 204 | empty — no envelope |
+| No / malformed / expired token | 401 | `{status: false, message, data: {code: "UNAUTHENTICATED", requestId}}` |
+| Valid token, resource belongs to another user | **404** | `{status: false, message, data: {code: "NOT_FOUND", requestId}}` |
+| Valid token, resource does not exist at all | **404** | same shape as the row above — **byte-identical (ignoring `requestId`)** |
+| Body fails validation | 400 | `{status: false, message, data: {code: "BAD_REQUEST", details, requestId}}` |
+| Unique constraint violated | 409 | `{status: false, message, data: {code: "CONFLICT", requestId}}` |
+| Unhandled | 500 | `{status: false, message, data: {code: "INTERNAL_ERROR", requestId}}`, no internal detail leaked |
 
 **Why 404 and not 403 for cross-owner access.** §3 of the brief forbids a user from learning
 of the *existence* of another user's data. A 403 distinguishes "exists but is not yours" from
@@ -158,12 +166,12 @@ cannot be used to seek into another user's rows. An unparseable cursor is reject
 400, not silently ignored, for the same reason an out-of-range `limit` is rejected rather
 than clamped.
 
-**Next-page cursor delivery.** The response body for a list route stays a plain array of
-resources (§2's "resource returned" contract); the cursor for the next page is returned in
-an `X-Next-Cursor` response header, present only when the page was full (i.e. more rows may
-exist). This was chosen over wrapping the body in `{ items, nextCursor }` so the list
-response shape stays uniform with every other 200 in this API (a bare array/object, never a
-pagination envelope) — implemented in `collection.controller.ts`/`bookmark.controller.ts`.
+**Next-page cursor delivery.** `data` for a list route is a plain array of resources, same as
+every other 200's `data` (§2); the cursor for the next page is returned in an `X-Next-Cursor`
+response header, present only when the page was full (i.e. more rows may exist). This was
+chosen over folding `nextCursor` into the body so the list response shape stays uniform with
+every other 200 in this API (`data` is always the bare array, never a pagination sub-envelope)
+— implemented in `collection.controller.ts`/`bookmark.controller.ts`.
 
 **`q` search field scope.** `q` matches `title`+`notes` for bookmarks. Collection has no
 `notes` field, so `q` on `GET /collections` matches `name` only — an intentional asymmetry
@@ -171,17 +179,31 @@ following from the two models' actual fields, not an oversight.
 
 ---
 
-## 6. Error shape
+## 6. Response envelope
 
-One envelope, produced by a single exception filter
+Every response — success or error — is one shape:
+
+```ts
+{ status: boolean, message: string, data: unknown }
+```
+
+**Success** is wrapped by a global interceptor
+(`pbm-service/src/common/interceptors/response-envelope.interceptor.ts`, registered via
+`app.useGlobalInterceptors()` in `main.ts`). `status` is `true`, `message` is a fixed
+per-verb string (`OK`/`Created`/`Updated`), and `data` is whatever the controller returned
+(a resource, or an array for list routes). 204 responses are left untouched — no body, per
+HTTP semantics.
+
+**Error** is produced by a single exception filter
 (`pbm-service/src/common/filters/all-exceptions.filter.ts`, registered globally via
-`app.useGlobalFilters()` in `main.ts`), used by every route.
+`app.useGlobalFilters()` in `main.ts`), used by every route:
 
 ```json
 {
-  "error": {
+  "status": false,
+  "message": "Resource not found",
+  "data": {
     "code": "NOT_FOUND",
-    "message": "Resource not found",
     "details": [{ "field": "url", "issue": "must be a valid http(s) URL" }],
     "requestId": "01J…"
   }
@@ -193,17 +215,17 @@ Rules the filter enforces:
 - `message` is drawn from a fixed set of strings. It **never interpolates an id, name, or any
   field value belonging to a resource the caller does not own** — that would reintroduce the
   existence oracle that the 404 policy closes.
-- `details` appears only on 400, and only ever describes the caller's own submitted input.
-- 500 responses carry `requestId` and nothing else. Stack traces and Prisma error text are
-  logged, never serialised. The filter must explicitly catch `PrismaClientKnownRequestError`
-  — Nest's default behaviour otherwise leaks the constraint name and table in the response.
-  Confirmed: `AllExceptionsFilter` catches `Prisma.PrismaClientKnownRequestError` explicitly
-  (mapping `P2002` to 409, everything else to a bare 500) before falling through to the
-  generic `unknown` branch.
+- `data.details` appears only on 400, and only ever describes the caller's own submitted input.
+- 500 responses carry `data.requestId` and nothing else beyond `data.code`. Stack traces and
+  Prisma error text are logged, never serialised. The filter must explicitly catch
+  `PrismaClientKnownRequestError` — Nest's default behaviour otherwise leaks the constraint
+  name and table in the response. Confirmed: `AllExceptionsFilter` catches
+  `Prisma.PrismaClientKnownRequestError` explicitly (mapping `P2002` to 409, everything else
+  to a bare 500) before falling through to the generic `unknown` branch.
 - `message` for a 400 raised by the global `ValidationPipe` is always the fixed string
   `"Validation failed"` — `validation-exception-factory.ts` supplies a custom
   `exceptionFactory` that turns class-validator's per-property constraint messages into
-  `details: [{ field, issue }]` instead of letting them leak into `message` itself.
+  `data.details: [{ field, issue }]` instead of letting them leak into `message` itself.
 
 ---
 
