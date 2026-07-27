@@ -27,7 +27,8 @@ Rationale for choosing the access token over the ID token: see `DECISIONS.md` AD
 **ID tokens are actively rejected**, not merely unused: an ID token's `aud` claim is the
 Auth0 application's `client_id`, not `https://bbl-candidate-test-api` — so it legitimately
 fails the `aud` check and returns 401. This is standard OIDC semantics, not an implementation
-quirk. Proof: `[FILL: path to the test, once written]`.
+quirk. Proof: `pbm-service/test/security-matrix.e2e-spec.ts` — the "ID token (aud =
+client_id)" auth state asserts 401 on every protected route.
 
 Both claims above were confirmed against live tokens on 2026-07-27: the password grant is
 disabled on this Auth0 client (`unauthorized_client`), so `pbm-service/scripts/get-token.mjs`
@@ -225,10 +226,10 @@ Four independent layers. Any one of them failing alone does not breach the invar
 
 | # | Layer | Mechanism | Proof |
 | --- | --- | --- | --- |
-| 1 | Authentication | global deny-by-default guard; `ownerId` from verified `sub` only | `[FILL: test path, once written]` |
-| 2 | Data access | every Prisma call lives in a repository layer (`pbm-service/src/database/<entity>/<entity>.repository.ts`, one per model); every method takes `ownerId` as its first parameter and includes it in `where`. Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries: `PrismaService` (`pbm-service/src/database/prisma.service.ts`) is provided by `PrismaModule` (`pbm-service/src/database/prisma.module.ts`) and not exported from it; only repository classes registered in that same module are exported | `[FILL: once a repository + its test exist]` |
-| 3 | Write validation | `ownerId` is not a field on any inbound DTO, so it cannot be assigned by a client regardless of body content; referenced `collectionId` is ownership-checked before use | `[FILL: once implemented]` |
-| 4 | Response policy | uniform 404, fixed error strings, no cross-owner values in messages | `[FILL: once implemented]` |
+| 1 | Authentication | global deny-by-default guard (`pbm-service/src/modules/auth/jwt-auth.guard.ts`, registered as `APP_GUARD` in `auth.module.ts`); `ownerId` from verified `sub` only (`current-user.decorator.ts`) | `pbm-service/test/security-matrix.e2e-spec.ts` — 6 invalid auth states × every registered protected route → 401 |
+| 2 | Data access | every Prisma call lives in a repository layer (`pbm-service/src/database/<entity>/<entity>.repository.ts`, one per model); every method takes `ownerId` as its first parameter and includes it in `where`. Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries: `PrismaService` (`pbm-service/src/database/prisma.service.ts`) is provided by `PrismaModule` (`pbm-service/src/database/prisma.module.ts`) and not exported from it; only repository classes registered in that same module are exported | `pbm-service/src/database/collection/collection.repository.ts` (every method takes `ownerId` first and scopes `where` on it); exercised by the cross-owner 404 and list-scoping cases in `test/security-matrix.e2e-spec.ts` |
+| 3 | Write validation | `ownerId` is not a field on any inbound DTO, so it cannot be assigned by a client regardless of body content (global `ValidationPipe` with `forbidNonWhitelisted` rejects it with 400); referenced `collectionId` is ownership-checked before use | "ownerId in a request body → 400" case in `test/security-matrix.e2e-spec.ts`; `collectionId` check pending — no bookmark endpoint exists yet |
+| 4 | Response policy | uniform 404, fixed error strings, no cross-owner values in messages | cross-owner vs nonexistent 404s asserted **byte-identical** in `test/security-matrix.e2e-spec.ts`; the single exception filter of §6 is still pending — current envelopes are Nest defaults with fixed strings |
 
 ### What is deliberately *not* defended against
 
@@ -243,13 +244,18 @@ Stating the boundary is part of the contract:
 ### Runnable proof
 
 ```bash
-[FILL: e.g. npm run test:security, once the test suite exists]
+cd pbm-service && npm run test:security   # requires the Postgres container up (docker compose up -d)
 ```
 
-Intended shape: mint tokens for two seeded users from a local JWKS, then iterate every
-route × both users, asserting that user B receives 404 on every one of user A's resources
-and 401 with no token. `[FILL: state the actual count once routes are final — "N routes × 2
-users × 3 auth states = M assertions."]`
+Implemented in `pbm-service/test/security-matrix.e2e-spec.ts`: mints RS256 tokens for two
+users against a **local JWKS server** (no live Auth0 dependency), enumerates every route
+registered on the Express router at runtime, and asserts: 6 invalid auth states (none,
+malformed, expired, wrong signature, ID-token-shaped `aud`, missing `sub`) × every
+protected route → 401; cross-owner GET/PATCH/DELETE → 404 **byte-identical** to the
+nonexistent-id 404; `ownerId` in a body → 400; list responses never leak the other user's
+rows. Current count: 6 registered routes (5 collection + `/health`), 15 test cases, 30
+sweep assertions. Routes are enumerated, not listed by hand — a route added later joins
+the 401 sweep automatically.
 
 The value of a matrix test over hand-written cases is that a route added later is covered
 automatically — the endpoint someone forgets to write a test for is exactly the one that leaks.

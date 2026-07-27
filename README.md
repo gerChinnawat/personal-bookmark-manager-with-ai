@@ -46,7 +46,11 @@ npm run db:generate        # prisma generate — currently a no-op stub, no mode
 npm run start:dev
 ```
 
-`[FILL: Auth0 domain/audience/client id env vars, migrate/seed commands, dev server port — once auth and the first domain model land.]`
+Auth config lives in `.env` (already present in `.env.example`): `AUTH0_ISSUER`,
+`AUTH0_AUDIENCE`, `AUTH0_JWKS_URI` — the service fails at boot if any is missing rather
+than falling open. Migrations: `npm run db:migrate`. Dev server port: `3000`.
+Security matrix test: `npm run test:security` (Postgres must be up).
+`[FILL: seed command — once seed data for 2+ users exists.]`
 
 ## Auth0 configuration
 
