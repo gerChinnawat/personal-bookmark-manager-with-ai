@@ -8,5 +8,6 @@ import { BookmarkManager } from './managers/bookmark.manager';
   imports: [DatabaseModule],
   controllers: [BookmarkController],
   providers: [BookmarkService, BookmarkManager],
+  exports: [BookmarkManager],
 })
 export class BookmarkModule {}

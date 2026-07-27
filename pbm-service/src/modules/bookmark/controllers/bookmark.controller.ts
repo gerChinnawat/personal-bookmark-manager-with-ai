@@ -6,11 +6,15 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { BookmarkManager } from '../managers/bookmark.manager';
 import { CreateBookmarkDto, UpdateBookmarkDto } from '../dtos/bookmark.dto';
+import { BookmarkListQueryDto } from '../../../common/dtos/list-query.dto';
 
 @Controller('bookmarks')
 export class BookmarkController {
@@ -22,17 +26,31 @@ export class BookmarkController {
   }
 
   @Get()
-  findAll(
+  async findAll(
     @CurrentUser() ownerId: string,
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query() query: BookmarkListQueryDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.bookmarkManager.findAll(ownerId, { limit, offset });
+    const { items, nextCursor } = await this.bookmarkManager.findAll(
+      ownerId,
+      query,
+    );
+    if (nextCursor) res.set('X-Next-Cursor', nextCursor);
+    return items;
   }
 
   @Get(':id')
   findOne(@CurrentUser() ownerId: string, @Param('id') id: string) {
     return this.bookmarkManager.findOne(ownerId, id);
+  }
+
+  @Put(':id')
+  replace(
+    @CurrentUser() ownerId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateBookmarkDto,
+  ) {
+    return this.bookmarkManager.replace(ownerId, id, dto);
   }
 
   @Patch(':id')

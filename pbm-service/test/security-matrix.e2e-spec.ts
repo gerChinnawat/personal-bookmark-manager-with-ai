@@ -4,6 +4,8 @@ import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { exportJWK, generateKeyPair, KeyLike, SignJWT } from 'jose';
 import * as request from 'supertest';
+import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { validationExceptionFactory } from '../src/common/filters/validation-exception-factory';
 
 // The runnable proof for API_DESIGN.md §8: mints real RS256 tokens against a
 // local JWKS (no live Auth0 dependency), then walks every registered route ×
@@ -51,7 +53,12 @@ describe('Security matrix (e2e)', () => {
     privateKey = pair.privateKey;
     rogueKey = (await generateKeyPair('RS256')).privateKey;
 
-    const jwk = { ...(await exportJWK(pair.publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig' };
+    const jwk = {
+      ...(await exportJWK(pair.publicKey)),
+      kid: 'test-key',
+      alg: 'RS256',
+      use: 'sig',
+    };
     jwksServer = createServer((_req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ keys: [jwk] }));
@@ -71,8 +78,14 @@ describe('Security matrix (e2e)', () => {
     }).compile();
     app = moduleFixture.createNestApplication();
     // Mirror main.ts exactly — the matrix must exercise prod behaviour.
+    app.useGlobalFilters(new AllExceptionsFilter());
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        exceptionFactory: validationExceptionFactory,
+      }),
     );
     await app.init();
   });
@@ -84,6 +97,15 @@ describe('Security matrix (e2e)', () => {
 
   const http = () => request(app.getHttpServer());
   const auth = (token: string) => `Bearer ${token}`;
+
+  // Error bodies now carry a per-request requestId (API_DESIGN.md §6), so
+  // "byte-identical" comparisons between two 404s must ignore that one
+  // nondeterministic field rather than compare raw response text.
+  const bodyIgnoringRequestId = (res: request.Response) => {
+    const clone = JSON.parse(JSON.stringify(res.body));
+    if (clone?.error?.requestId) delete clone.error.requestId;
+    return clone;
+  };
 
   /** Every route Nest registered, as "METHOD /path" + a requestable URL. */
   function registeredRoutes(): { key: string; method: string; url: string }[] {
@@ -119,19 +141,22 @@ describe('Security matrix (e2e)', () => {
       ['missing sub', () => mint(undefined)],
     ];
 
-    it.each(authStates)('%s → 401 on every protected route', async (_label, tokenFn) => {
-      const token = await tokenFn();
-      for (const route of registeredRoutes()) {
-        if (PUBLIC_ROUTES.has(route.key)) continue;
-        let req = (http() as any)[route.method](route.url);
-        if (token) req = req.set('Authorization', auth(token));
-        const res = await req;
-        expect({ route: route.key, status: res.status }).toEqual({
-          route: route.key,
-          status: 401,
-        });
-      }
-    });
+    it.each(authStates)(
+      '%s → 401 on every protected route',
+      async (_label, tokenFn) => {
+        const token = await tokenFn();
+        for (const route of registeredRoutes()) {
+          if (PUBLIC_ROUTES.has(route.key)) continue;
+          let req = (http() as any)[route.method](route.url);
+          if (token) req = req.set('Authorization', auth(token));
+          const res = await req;
+          expect({ route: route.key, status: res.status }).toEqual({
+            route: route.key,
+            status: 401,
+          });
+        }
+      },
+    );
   });
 
   describe('public route', () => {
@@ -171,15 +196,27 @@ describe('Security matrix (e2e)', () => {
         .expect(200);
     });
 
-    const crossOwnerCases: [string, (id: string, t: string) => request.Test][] = [
-      ['GET', (id, t) => http().get(`/collections/${id}`).set('Authorization', auth(t))],
+    const crossOwnerCases: [string, (id: string, t: string) => request.Test][] =
       [
-        'PATCH',
-        (id, t) =>
-          http().patch(`/collections/${id}`).set('Authorization', auth(t)).send({ name: 'x' }),
-      ],
-      ['DELETE', (id, t) => http().delete(`/collections/${id}`).set('Authorization', auth(t))],
-    ];
+        [
+          'GET',
+          (id, t) =>
+            http().get(`/collections/${id}`).set('Authorization', auth(t)),
+        ],
+        [
+          'PATCH',
+          (id, t) =>
+            http()
+              .patch(`/collections/${id}`)
+              .set('Authorization', auth(t))
+              .send({ name: 'x' }),
+        ],
+        [
+          'DELETE',
+          (id, t) =>
+            http().delete(`/collections/${id}`).set('Authorization', auth(t)),
+        ],
+      ];
 
     it.each(crossOwnerCases)(
       "%s: user B on user A's collection → 404 identical to nonexistent id",
@@ -188,9 +225,12 @@ describe('Security matrix (e2e)', () => {
         const nonexistent = await call('nonexistent-id', tokenB);
         expect(crossOwner.status).toBe(404);
         expect(nonexistent.status).toBe(404);
-        // Byte-identical bodies: cross-owner must be indistinguishable from
-        // not-found (API_DESIGN.md §2 — no existence oracle).
-        expect(crossOwner.text).toBe(nonexistent.text);
+        // Identical bodies (ignoring the per-request requestId): cross-owner
+        // must be indistinguishable from not-found (API_DESIGN.md §2 — no
+        // existence oracle).
+        expect(bodyIgnoringRequestId(crossOwner)).toEqual(
+          bodyIgnoringRequestId(nonexistent),
+        );
       },
     );
 
@@ -212,7 +252,9 @@ describe('Security matrix (e2e)', () => {
         .get('/collections')
         .set('Authorization', auth(tokenB))
         .expect(200);
-      expect(res.body.map((c: { id: string }) => c.id)).not.toContain(collectionId);
+      expect(res.body.map((c: { id: string }) => c.id)).not.toContain(
+        collectionId,
+      );
     });
 
     it('collection is intact after all cross-owner attempts', async () => {
@@ -265,15 +307,27 @@ describe('Security matrix (e2e)', () => {
         .expect(200);
     });
 
-    const crossOwnerCases: [string, (id: string, t: string) => request.Test][] = [
-      ['GET', (id, t) => http().get(`/bookmarks/${id}`).set('Authorization', auth(t))],
+    const crossOwnerCases: [string, (id: string, t: string) => request.Test][] =
       [
-        'PATCH',
-        (id, t) =>
-          http().patch(`/bookmarks/${id}`).set('Authorization', auth(t)).send({ title: 'x' }),
-      ],
-      ['DELETE', (id, t) => http().delete(`/bookmarks/${id}`).set('Authorization', auth(t))],
-    ];
+        [
+          'GET',
+          (id, t) =>
+            http().get(`/bookmarks/${id}`).set('Authorization', auth(t)),
+        ],
+        [
+          'PATCH',
+          (id, t) =>
+            http()
+              .patch(`/bookmarks/${id}`)
+              .set('Authorization', auth(t))
+              .send({ title: 'x' }),
+        ],
+        [
+          'DELETE',
+          (id, t) =>
+            http().delete(`/bookmarks/${id}`).set('Authorization', auth(t)),
+        ],
+      ];
 
     it.each(crossOwnerCases)(
       "%s: user B on user A's bookmark → 404 identical to nonexistent id",
@@ -282,7 +336,9 @@ describe('Security matrix (e2e)', () => {
         const nonexistent = await call('nonexistent-id', tokenB);
         expect(crossOwner.status).toBe(404);
         expect(nonexistent.status).toBe(404);
-        expect(crossOwner.text).toBe(nonexistent.text);
+        expect(bodyIgnoringRequestId(crossOwner)).toEqual(
+          bodyIgnoringRequestId(nonexistent),
+        );
       },
     );
 
@@ -304,7 +360,9 @@ describe('Security matrix (e2e)', () => {
         .get('/bookmarks')
         .set('Authorization', auth(tokenB))
         .expect(200);
-      expect(res.body.map((b: { id: string }) => b.id)).not.toContain(bookmarkId);
+      expect(res.body.map((b: { id: string }) => b.id)).not.toContain(
+        bookmarkId,
+      );
     });
 
     // CLAUDE.md rule 5 / API_DESIGN.md §4: a write that references another
@@ -314,7 +372,11 @@ describe('Security matrix (e2e)', () => {
       await http()
         .post('/bookmarks')
         .set('Authorization', auth(tokenB))
-        .send({ url: 'https://example.com', title: 'cross-collection', collectionId: collectionIdA })
+        .send({
+          url: 'https://example.com',
+          title: 'cross-collection',
+          collectionId: collectionIdA,
+        })
         .expect(404);
     });
 
@@ -348,6 +410,412 @@ describe('Security matrix (e2e)', () => {
         .set('Authorization', auth(tokenA))
         .expect(200);
       expect(res.body.title).toBe('matrix-fixture');
+    });
+  });
+
+  describe('PUT — full replace semantics', () => {
+    let tokenA: string;
+
+    beforeAll(async () => {
+      tokenA = await mint(USER_A);
+    });
+
+    it('PUT /collections/:id replaces name; omitting it is a validation failure', async () => {
+      const created = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'put-original' })
+        .expect(201);
+
+      await http()
+        .put(`/collections/${created.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'put-replaced' })
+        .expect(200);
+      const fetched = await http()
+        .get(`/collections/${created.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      expect(fetched.body.name).toBe('put-replaced');
+
+      await http()
+        .put(`/collections/${created.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .send({})
+        .expect(400);
+
+      await http()
+        .delete(`/collections/${created.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('PUT /bookmarks/:id nulls omitted optional fields (notes, collectionId) — unlike PATCH', async () => {
+      const collection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'put-bookmark-fixture' })
+        .expect(201);
+      const created = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'put-original',
+          notes: 'a note',
+          collectionId: collection.body.id,
+        })
+        .expect(201);
+      expect(created.body.notes).toBe('a note');
+      expect(created.body.collectionId).toBe(collection.body.id);
+
+      const replaced = await http()
+        .put(`/bookmarks/${created.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com/replaced', title: 'put-replaced' })
+        .expect(200);
+      expect(replaced.body.url).toBe('https://example.com/replaced');
+      expect(replaced.body.notes).toBeNull();
+      expect(replaced.body.collectionId).toBeNull();
+
+      await http()
+        .delete(`/bookmarks/${created.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collection.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('PUT /bookmarks/:id rejects a missing required field (url) with 400', async () => {
+      const created = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com', title: 'put-required-check' })
+        .expect(201);
+
+      await http()
+        .put(`/bookmarks/${created.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .send({ title: 'missing url' })
+        .expect(400);
+
+      await http()
+        .delete(`/bookmarks/${created.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it("PUT /bookmarks/:id re-validates a reassigned collectionId's owner → 404", async () => {
+      const tokenB = await mint(USER_B);
+      const foreignCollection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenB))
+        .send({ name: 'put-foreign-collection' })
+        .expect(201);
+      const bookmark = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com', title: 'put-cross-collection' })
+        .expect(201);
+
+      await http()
+        .put(`/bookmarks/${bookmark.body.id}`)
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'put-cross-collection',
+          collectionId: foreignCollection.body.id,
+        })
+        .expect(404);
+
+      await http()
+        .delete(`/bookmarks/${bookmark.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${foreignCollection.body.id}`)
+        .set('Authorization', auth(tokenB));
+    });
+  });
+
+  describe('GET /me', () => {
+    it('returns claims from the verified token, not a DB lookup', async () => {
+      const token = await mint(USER_A);
+      const res = await http()
+        .get('/me')
+        .set('Authorization', auth(token))
+        .expect(200);
+      expect(res.body.sub).toBe(USER_A);
+    });
+  });
+
+  describe('GET /collections/:id/bookmarks', () => {
+    let tokenA: string;
+    let tokenB: string;
+    let collectionId: string;
+    let bookmarkId: string;
+
+    beforeAll(async () => {
+      tokenA = await mint(USER_A);
+      tokenB = await mint(USER_B);
+      const collection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'nested-fixture' })
+        .expect(201);
+      collectionId = collection.body.id;
+      const bookmark = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'nested-bookmark',
+          collectionId,
+        })
+        .expect(201);
+      bookmarkId = bookmark.body.id;
+    });
+
+    afterAll(async () => {
+      await http()
+        .delete(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collectionId}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('owner sees the bookmark scoped to the collection', async () => {
+      const res = await http()
+        .get(`/collections/${collectionId}/bookmarks`)
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      expect(res.body.map((b: { id: string }) => b.id)).toContain(bookmarkId);
+    });
+
+    it("404 when the collection isn't the caller's — not an empty list", async () => {
+      await http()
+        .get(`/collections/${collectionId}/bookmarks`)
+        .set('Authorization', auth(tokenB))
+        .expect(404);
+    });
+
+    it('cross-owner 404 is identical to a nonexistent collection id', async () => {
+      const crossOwner = await http()
+        .get(`/collections/${collectionId}/bookmarks`)
+        .set('Authorization', auth(tokenB));
+      const nonexistent = await http()
+        .get('/collections/nonexistent-id/bookmarks')
+        .set('Authorization', auth(tokenB));
+      expect(crossOwner.status).toBe(404);
+      expect(nonexistent.status).toBe(404);
+      expect(bodyIgnoringRequestId(crossOwner)).toEqual(
+        bodyIgnoringRequestId(nonexistent),
+      );
+    });
+  });
+
+  describe('list query params', () => {
+    let tokenA: string;
+
+    beforeAll(async () => {
+      tokenA = await mint(USER_A);
+    });
+
+    it('limit above 100 is rejected with 400, not clamped', async () => {
+      await http()
+        .get('/bookmarks?limit=101')
+        .set('Authorization', auth(tokenA))
+        .expect(400);
+    });
+
+    it('an unparsable cursor is rejected with 400', async () => {
+      await http()
+        .get('/bookmarks?cursor=not-valid-base64-json')
+        .set('Authorization', auth(tokenA))
+        .expect(400);
+    });
+
+    it('an unknown sort value is rejected with 400 (allow-list only)', async () => {
+      await http()
+        .get('/bookmarks?sort=title:asc')
+        .set('Authorization', auth(tokenA))
+        .expect(400);
+    });
+
+    it('cursor pagination walks the full result set exactly once per row', async () => {
+      const titles = ['cursor-page-a', 'cursor-page-b', 'cursor-page-c'];
+      const created: string[] = [];
+      for (const title of titles) {
+        const res = await http()
+          .post('/bookmarks')
+          .set('Authorization', auth(tokenA))
+          .send({ url: 'https://example.com', title })
+          .expect(201);
+        created.push(res.body.id);
+      }
+
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let i = 0; i < titles.length; i++) {
+        const req = http()
+          .get('/bookmarks')
+          .query({
+            limit: 1,
+            sort: 'createdAt:asc',
+            ...(cursor ? { cursor } : {}),
+          })
+          .set('Authorization', auth(tokenA));
+        const res = await req.expect(200);
+        expect(res.body.length).toBe(1);
+        seen.push(res.body[0].id);
+        cursor = res.headers['x-next-cursor'];
+      }
+      for (const id of created) expect(seen).toContain(id);
+
+      for (const id of created) {
+        await http()
+          .delete(`/bookmarks/${id}`)
+          .set('Authorization', auth(tokenA));
+      }
+    });
+
+    it('uncategorised=true returns only bookmarks with no collection', async () => {
+      const collection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'uncategorised-fixture-collection' })
+        .expect(201);
+      const categorised = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'categorised-bookmark',
+          collectionId: collection.body.id,
+        })
+        .expect(201);
+      const uncategorised = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com', title: 'uncategorised-bookmark' })
+        .expect(201);
+
+      const res = await http()
+        .get('/bookmarks?uncategorised=true')
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      const ids = res.body.map((b: { id: string }) => b.id);
+      expect(ids).toContain(uncategorised.body.id);
+      expect(ids).not.toContain(categorised.body.id);
+
+      await http()
+        .delete(`/bookmarks/${categorised.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/bookmarks/${uncategorised.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collection.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('q matches title/notes case-insensitively', async () => {
+      const match = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'Distinctive Search Target',
+        })
+        .expect(201);
+      const noMatch = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({ url: 'https://example.com', title: 'unrelated bookmark' })
+        .expect(201);
+
+      const res = await http()
+        .get('/bookmarks')
+        .query({ q: 'distinctive search' })
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      const ids = res.body.map((b: { id: string }) => b.id);
+      expect(ids).toContain(match.body.id);
+      expect(ids).not.toContain(noMatch.body.id);
+
+      await http()
+        .delete(`/bookmarks/${match.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/bookmarks/${noMatch.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('q on GET /collections matches name only (no notes field to search)', async () => {
+      const match = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'Distinctive Collection Name' })
+        .expect(201);
+      const noMatch = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'unrelated collection' })
+        .expect(201);
+
+      const res = await http()
+        .get('/collections')
+        .query({ q: 'distinctive collection' })
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      const ids = res.body.map((c: { id: string }) => c.id);
+      expect(ids).toContain(match.body.id);
+      expect(ids).not.toContain(noMatch.body.id);
+
+      await http()
+        .delete(`/collections/${match.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${noMatch.body.id}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('collectionId filter scopes to that collection, and 404s if not owned', async () => {
+      const tokenB = await mint(USER_B);
+      const collection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'collectionId-filter-fixture' })
+        .expect(201);
+      const bookmark = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'collectionId-filter-bookmark',
+          collectionId: collection.body.id,
+        })
+        .expect(201);
+
+      const res = await http()
+        .get('/bookmarks')
+        .query({ collectionId: collection.body.id })
+        .set('Authorization', auth(tokenA))
+        .expect(200);
+      expect(res.body.map((b: { id: string }) => b.id)).toContain(
+        bookmark.body.id,
+      );
+
+      await http()
+        .get('/bookmarks')
+        .query({ collectionId: collection.body.id })
+        .set('Authorization', auth(tokenB))
+        .expect(404);
+
+      await http()
+        .delete(`/bookmarks/${bookmark.body.id}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collection.body.id}`)
+        .set('Authorization', auth(tokenA));
     });
   });
 });

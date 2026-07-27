@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Collection } from '@prisma/client';
-import { CollectionRepository } from '../../../database/collection/collection.repository';
+import {
+  CollectionRepository,
+  FindAllOptions,
+} from '../../../database/collection/collection.repository';
 import {
   CreateCollectionDto,
   UpdateCollectionDto,
 } from '../dtos/collection.dto';
+import { encodeCursor } from '../../../common/pagination/cursor';
 
 const NOT_FOUND_MESSAGE = 'Collection not found';
 
@@ -13,6 +17,11 @@ const NOT_FOUND_MESSAGE = 'Collection not found';
 function omitOwnerId(collection: Collection): Omit<Collection, 'ownerId'> {
   const { ownerId: _ownerId, ...rest } = collection;
   return rest;
+}
+
+export interface CollectionListResult {
+  items: Omit<Collection, 'ownerId'>[];
+  nextCursor?: string;
 }
 
 @Injectable()
@@ -26,10 +35,20 @@ export class CollectionService {
 
   async findAll(
     ownerId: string,
-    pagination: { limit?: number; offset?: number },
-  ) {
-    const found = await this.collectionRepository.findAll(ownerId, pagination);
-    return found.map(omitOwnerId);
+    options: FindAllOptions,
+  ): Promise<CollectionListResult> {
+    const limit = options.limit ?? 25;
+    const found = await this.collectionRepository.findAll(ownerId, options);
+    // A full page may mean more rows exist; the cursor for the next page is
+    // the keyset position of the last row returned (API_DESIGN.md §5).
+    const nextCursor =
+      found.length === limit
+        ? encodeCursor({
+            createdAt: found[found.length - 1].createdAt.toISOString(),
+            id: found[found.length - 1].id,
+          })
+        : undefined;
+    return { items: found.map(omitOwnerId), nextCursor };
   }
 
   async findOne(ownerId: string, id: string) {
@@ -40,6 +59,17 @@ export class CollectionService {
 
   async update(ownerId: string, id: string, dto: UpdateCollectionDto) {
     const updated = await this.collectionRepository.update(ownerId, id, dto);
+    if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);
+    return omitOwnerId(updated);
+  }
+
+  // PUT: full replace. Collection has one mutable field (name), which is
+  // required on the DTO, so there is no optional field to null out here —
+  // unlike Bookmark, whose PUT does have that case (see bookmark.service.ts).
+  async replace(ownerId: string, id: string, dto: CreateCollectionDto) {
+    const updated = await this.collectionRepository.update(ownerId, id, {
+      name: dto.name,
+    });
     if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);
     return omitOwnerId(updated);
   }

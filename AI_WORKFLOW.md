@@ -6,11 +6,13 @@ How this repo was actually built with coding agents — including the parts that
 > cross-checkable against the commit history and `/transcripts/`. A writeup that does not
 > match the committed code is worse than a shorter, accurate one.
 >
-> **Status of this document:** as of 2026-07-26, `pbm-service` and `pbm-ui` are still empty
-> scaffolds — no backend or frontend code has been written yet. Everything filled in below is
-> real, but it describes the setup/design phase only (workflow rules, decision log, API
-> design). Sections that depend on actual implementation are left as `[FILL]` on purpose,
-> to be completed as that work happens, rather than pre-written and later hoped to be true.
+> **Status of this document:** as of 2026-07-27, `pbm-service` has a working NestJS + Prisma
+> backend — auth guard, `Collection`/`Bookmark` full CRUD including `PUT`, list params
+> (`cursor`/`sort`/`q`/`collectionId`/`uncategorised`), `GET /me`, the nested bookmarks route,
+> and the shared exception filter — all covered by the security matrix (see §2 tasks 9–12).
+> `pbm-ui/` is still empty. Sections that depend on actual implementation are filled in as that
+> work happens rather than pre-written and later hoped to be true; any still marked `[FILL]`
+> below genuinely haven't happened yet (frontend work, cost instrumentation, etc.).
 
 ---
 
@@ -69,6 +71,7 @@ Not one "build me a bookmark app" prompt. The actual task sequence so far, in or
 | 9b | First domain model + endpoints: `Collection` schema + migration, `CollectionRepository`, service/manager/controller (`/collections` CRUD) | Repository takes `ownerId` first on every method; `ownerId` never in a DTO; matrix precondition (see below) | Landed with a **temporary stub** `CurrentUser` (single fixed owner, clearly marked) because the guard didn't exist yet; matrix precondition therefore deferred to task 10 — the stub meant no second user was even mintable. Precondition satisfied in task 10, same commit as the guard |
 | 10 | Auth guard + JWKS verification + the security matrix harness | Global deny-by-default guard; only `GET /health` public; verify signature/`iss`/`aud`/`exp` (+`nbf` when present) via live JWKS w/ 10-min cache; ID tokens 401; matrix test green | Done 2026-07-27. User first researched the real token via `scripts/get-token.mjs` (password grant is disabled on the client), which caught that the live `aud` is an **array** — folded into the guard before it was written. `jose@4` chosen (v5+ is ESM-only, service is CJS); stub `CurrentUser` replaced with verified-`sub` version; 15-case matrix (`test/security-matrix.e2e-spec.ts`) enumerates routes from the router so later endpoints join the 401 sweep automatically |
 | 11 | Second domain model + endpoints: `Bookmark` schema + migration, `BookmarkRepository`, service/manager/controller (`/bookmarks` CRUD) | Same shape as `Collection` (`ownerId` first on every repository method, never in a DTO); plus CLAUDE.md rule 5's second check — a write's `collectionId` re-validated against the caller's own collections; matrix extended in the same commit, not a follow-up | Done 2026-07-27. `url` restricted to `http(s)://` via `class-validator`'s `IsUrl` protocol allow-list (rejects `javascript:`/`data:`/`file:`); `assertOwnsCollection` in `bookmark.service.ts` does the second ownership check via the existing `CollectionRepository`, reusing rather than duplicating collection-lookup logic; matrix grew from 15 to 25 cases, adding the `collectionId`-cross-owner case on both `POST` and `PATCH` |
+| 12 | Close the gap between `API_DESIGN.md` and the implemented surface, found via a self-review against the spec: `GET /me`, `PUT` on both resources, `GET /collections/:id/bookmarks`, list params (`cursor`/`sort`/`q`/`collectionId`/`uncategorised`), the shared exception filter of §6, and fixing `limit` to reject values over 100 (§5) instead of silently clamping them | Every new/changed endpoint covered by the security matrix in the same pass, not a follow-up; build + full `test:security` suite green; docs updated in the same pass | Done 2026-07-27. User-instructed scope ("all in one pass," picked over per-endpoint or bugfix-only alternatives via `AskUserQuestion`). Found and fixed two defects while implementing rather than shipping them: (1) `GET /bookmarks?collectionId=<foreign>` returned an empty list instead of 404 for a collection the caller doesn't own — §5 says filter-by-`collectionId` gets the same ownership check as write-by-`collectionId`; (2) the `limit` query param wasn't being type-coerced before `class-validator`'s `@IsInt()` ran, so any explicit `?limit=` value failed validation for the wrong reason — masked because the one existing test for this (`limit=101 → 400`) got the right status code by accident. Also hit a real DB-state bug in testing itself: an earlier failed test run aborted before its own cleanup code ran, leaving rows that made a later, corrected run fail on stale data — recovered by truncating the test tables, not by patching the test to tolerate leftover state. Matrix grew from 25 to 41 cases (15 registered routes, 84 sweep assertions) |
 | … | `[FILL: rest of backend/frontend build]` | | |
 
 **Why decomposed this way:** the process/workflow scaffolding (memory, hooks, decision log) was
@@ -82,9 +85,21 @@ session time before a single line of `pbm-service`/`pbm-ui` code existed.
 
 ## 3. Where AI did well
 
-`[FILL: to be completed once backend/frontend implementation exists — the current work product
-is design documents and process tooling, not application code, so any "did well" claim here
-would be about docs rather than the artifact this section is meant to evaluate.]`
+- **The repository-layer discipline held up across independently-built modules without being
+  re-explained.** `Collection` (task 9b) and `Bookmark` (task 11) were built in separate
+  sessions, and task 12 added a third controller-layer consumer (`CollectionController` calling
+  into `BookmarkManager` for the nested `GET /collections/:id/bookmarks` route) — every one
+  followed the same `ownerId`-first, repository-only-touches-Prisma shape from `CLAUDE.md` rule
+  1 without a fresh reminder each time, because the rule and the existing code were consistent
+  with each other.
+- **The matrix-as-precondition approach caught real defects before they shipped, not after.**
+  Two genuine bugs (§4.3) were found while extending the matrix in the same pass as the code
+  that introduced them — task 12's own plan required "every new/changed endpoint covered by the
+  security matrix in the same pass," and following that plan literally is what surfaced both.
+- **A self-review against the written spec (`API_DESIGN.md`) found real, specific gaps** —
+  missing `PUT`, missing `GET /me`, a `limit`-clamping rule that contradicted the doc's own
+  text — rather than a generic "looks fine" pass. Treating the spec as a checklist to audit
+  code against, not just a document to write once, is what task 12 exists to demonstrate.
 
 ---
 
@@ -131,7 +146,39 @@ Cross-reference `API_DESIGN.md` §9 rather than repeating it in full.
   before writing any future ADR, since the failure mode (correct reasoning, wrong attribution) is
   easy to repeat.
 
-### 4.3 `[FILL: first real implementation defect, once backend/frontend code exists]`
+### 4.3 Two implementation defects, caught by writing the matrix cases the plan committed to
+
+Both found and fixed within task 12 (§2), before any commit — so neither qualifies for
+`API_DESIGN.md` §9, which requires a shipped commit. Recorded here instead, since this
+section's bar is "a commit or a test a reviewer can open," and both have the latter
+(`pbm-service/test/security-matrix.e2e-spec.ts`).
+
+- **`GET /bookmarks?collectionId=<foreign>` returned an empty list instead of 404.**
+  `API_DESIGN.md` §5 says the `collectionId` list filter gets the same ownership check as
+  `collectionId` on a write ("404 if not the caller's"), but `BookmarkService.findAll` only
+  ever passed it straight into the repository `where` clause — scoped by `ownerId`, so a
+  foreign collection id just matched zero rows instead of surfacing that it wasn't the
+  caller's. **Why it looked fine:** the write-path check (`assertOwnsCollection`, task 11) was
+  already correct and well-tested, so the list-path filter reusing the same field name read as
+  "already covered." **Found by:** writing the matrix case for it
+  ("`collectionId` filter scopes to that collection, and 404s if not owned") surfaced the gap
+  before the case could even be written as a positive-only test. **Fix:** `findAll` now calls
+  `assertOwnsCollection` when `collectionId` is present, before querying.
+- **`limit` above 100 was rejected with 400 for the wrong reason.** `ListQueryDto.limit` had
+  `@IsInt()`/`@Max(100)` but no `@Type(() => Number)`, and Nest's `ValidationPipe` doesn't
+  coerce DTO-bound query strings to numbers without an explicit `@Type`. Every request with an
+  explicit `?limit=` value failed `@IsInt()` on the raw string, regardless of the number —
+  `?limit=101` got the "right" 400 for the wrong reason, and `?limit=1` (a valid value) also
+  got a wrongful 400. **Why it looked fine:** the one test written for this
+  (`limit=101 → 400`) passed either way, since both the intended check (`@Max`) and the actual
+  bug (`@IsInt` on a string) produce the same status code — masking the defect completely.
+  **Found by:** a second test (cursor pagination, which necessarily sends `?limit=1`) failed
+  with 400 where it expected 200, which a single boundary-only test couldn't have caught.
+  **Fix:** added `@Type(() => Number)` before the validators. **Prevented from recurring by:**
+  the standing lesson is generalized here rather than left implicit — a validation rule that
+  can be satisfied by the bug it's meant to catch (both "reject for the right reason" and "the
+  actual bug" produce a 400 at the boundary value) needs a second test at a value where the two
+  diverge, not just a boundary-value test.
 
 ---
 

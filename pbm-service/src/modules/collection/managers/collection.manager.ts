@@ -4,6 +4,7 @@ import {
   CreateCollectionDto,
   UpdateCollectionDto,
 } from '../dtos/collection.dto';
+import { ListQueryDto } from '../../../common/dtos/list-query.dto';
 
 @Injectable()
 export class CollectionManager {
@@ -13,8 +14,8 @@ export class CollectionManager {
     return this.collectionService.create(ownerId, dto);
   }
 
-  findAll(ownerId: string, pagination: { limit?: number; offset?: number }) {
-    return this.collectionService.findAll(ownerId, pagination);
+  findAll(ownerId: string, query: ListQueryDto) {
+    return this.collectionService.findAll(ownerId, query);
   }
 
   findOne(ownerId: string, id: string) {
@@ -23,6 +24,10 @@ export class CollectionManager {
 
   update(ownerId: string, id: string, dto: UpdateCollectionDto) {
     return this.collectionService.update(ownerId, id, dto);
+  }
+
+  replace(ownerId: string, id: string, dto: CreateCollectionDto) {
+    return this.collectionService.replace(ownerId, id, dto);
   }
 
   remove(ownerId: string, id: string) {

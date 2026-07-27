@@ -1,9 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Collection, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma-service/prisma.service';
+import { decodeCursor } from '../../common/pagination/cursor';
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_SORT,
+  SortValue,
+} from '../../common/dtos/list-query.dto';
 
-const DEFAULT_LIMIT = 25;
-const MAX_LIMIT = 100;
+export interface FindAllOptions {
+  limit?: number;
+  cursor?: string;
+  sort?: SortValue;
+  q?: string;
+}
 
 @Injectable()
 export class CollectionRepository {
@@ -20,13 +30,42 @@ export class CollectionRepository {
     ownerId: string,
     {
       limit = DEFAULT_LIMIT,
-      offset = 0,
-    }: { limit?: number; offset?: number } = {},
+      cursor,
+      sort = DEFAULT_SORT,
+      q,
+    }: FindAllOptions = {},
   ): Promise<Collection[]> {
+    const direction = sort === 'createdAt:asc' ? 'asc' : 'desc';
+    const where: Prisma.CollectionWhereInput = { ownerId };
+
+    // Collection has no notes field, so q matches name only (unlike
+    // Bookmark's title+notes) — see API_DESIGN.md §5.
+    const andClauses: Prisma.CollectionWhereInput[] = [];
+
+    if (q) {
+      andClauses.push({
+        name: { contains: q, mode: Prisma.QueryMode.insensitive },
+      });
+    }
+
+    if (cursor) {
+      const position = decodeCursor(cursor);
+      const cursorCreatedAt = new Date(position.createdAt);
+      const op = direction === 'desc' ? 'lt' : 'gt';
+      andClauses.push({
+        OR: [
+          { createdAt: { [op]: cursorCreatedAt } },
+          { createdAt: cursorCreatedAt, id: { [op]: position.id } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) where.AND = andClauses;
+
     return this.prisma.collection.findMany({
-      where: { ownerId },
-      take: Math.min(limit, MAX_LIMIT),
-      skip: offset,
+      where,
+      orderBy: [{ createdAt: direction }, { id: direction }],
+      take: limit,
     });
   }
 

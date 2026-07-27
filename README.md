@@ -7,10 +7,12 @@ user's data.
 > **Status:** `pbm-service/` has a NestJS scaffold with Prisma wired as the ORM (multi-file
 > schema under `pbm-service/prisma/schema/`, `PrismaService`/`PrismaModule` in
 > `src/database/`, not yet exporting `PrismaService` to anything but the repository layer).
-> Global auth guard, `Collection`, and `Bookmark` modules exist (full CRUD except `PUT`,
-> cursor/`sort`/`q` list params, and the shared exception filter of §6 — those are still
-> pending). `pbm-ui/` is still empty. This README is corrected as implementation lands if
-> anything changes.
+> Global auth guard, `Collection`, and `Bookmark` modules exist with full CRUD including
+> `PUT` (full replace — omitted optional fields are nulled, not left untouched); list routes
+> support `limit`/`cursor`/`sort`/`q`, plus `collectionId`/`uncategorised` on bookmarks;
+> `GET /me` and `GET /collections/:id/bookmarks` are implemented; the shared exception filter
+> of §6 is wired globally. `pbm-ui/` is still empty. This README is corrected as
+> implementation lands if anything changes.
 
 ## Stack
 

@@ -6,18 +6,29 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { CollectionManager } from '../managers/collection.manager';
+import { BookmarkManager } from '../../bookmark/managers/bookmark.manager';
 import {
   CreateCollectionDto,
   UpdateCollectionDto,
 } from '../dtos/collection.dto';
+import {
+  CollectionBookmarksQueryDto,
+  ListQueryDto,
+} from '../../../common/dtos/list-query.dto';
 
 @Controller('collections')
 export class CollectionController {
-  constructor(private readonly collectionManager: CollectionManager) {}
+  constructor(
+    private readonly collectionManager: CollectionManager,
+    private readonly bookmarkManager: BookmarkManager,
+  ) {}
 
   @Post()
   create(@CurrentUser() ownerId: string, @Body() dto: CreateCollectionDto) {
@@ -25,17 +36,31 @@ export class CollectionController {
   }
 
   @Get()
-  findAll(
+  async findAll(
     @CurrentUser() ownerId: string,
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query() query: ListQueryDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.collectionManager.findAll(ownerId, { limit, offset });
+    const { items, nextCursor } = await this.collectionManager.findAll(
+      ownerId,
+      query,
+    );
+    if (nextCursor) res.set('X-Next-Cursor', nextCursor);
+    return items;
   }
 
   @Get(':id')
   findOne(@CurrentUser() ownerId: string, @Param('id') id: string) {
     return this.collectionManager.findOne(ownerId, id);
+  }
+
+  @Put(':id')
+  replace(
+    @CurrentUser() ownerId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateCollectionDto,
+  ) {
+    return this.collectionManager.replace(ownerId, id, dto);
   }
 
   @Patch(':id')
@@ -50,5 +75,23 @@ export class CollectionController {
   @Delete(':id')
   remove(@CurrentUser() ownerId: string, @Param('id') id: string) {
     return this.collectionManager.remove(ownerId, id);
+  }
+
+  @Get(':id/bookmarks')
+  async findBookmarks(
+    @CurrentUser() ownerId: string,
+    @Param('id') id: string,
+    @Query() query: CollectionBookmarksQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // 404 if the collection is not the caller's — not an empty list
+    // (API_DESIGN.md §4). findOne throws before the bookmark query runs.
+    await this.collectionManager.findOne(ownerId, id);
+    const { items, nextCursor } = await this.bookmarkManager.findAll(ownerId, {
+      ...query,
+      collectionId: id,
+    });
+    if (nextCursor) res.set('X-Next-Cursor', nextCursor);
+    return items;
   }
 }
