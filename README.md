@@ -53,7 +53,9 @@ npm run start:dev
 
 Auth config lives in `.env` (already present in `.env.example`): `AUTH0_ISSUER`,
 `AUTH0_AUDIENCE`, `AUTH0_JWKS_URI` — the service fails at boot if any is missing rather
-than falling open. Migrations: `npm run db:migrate`. Dev server port: `3000`.
+than falling open. Migrations: `npm run db:migrate`. Dev server port: `3001` — port `3000`
+is reserved for the `pbm-ui` dev server, since Auth0's app config has a fixed SPA callback
+of `http://localhost:3000/callback` (see `DECISIONS.md` ADR-010).
 Security matrix test: `npm run test:security` (Postgres must be up).
 
 Example data: `npm run db:seed` creates two fabricated owners (`auth0|example-user-1`,
@@ -63,7 +65,7 @@ filtering, and the cross-owner isolation invariant directly against the DB. Thes
 tied to the real Auth0 test account, so a live login (`candidate@test.com`, below) still
 starts with an empty account.
 
-API docs: Swagger UI is served at `http://localhost:3000/docs` (raw OpenAPI JSON at
+API docs: Swagger UI is served at `http://localhost:3001/docs` (raw OpenAPI JSON at
 `/docs-json`) once the server is running. Every documented route still goes through the
 real auth guard — use "Authorize" in the UI with a token from `scripts/get-token.mjs` to
 call protected routes from the docs page itself.
@@ -82,7 +84,7 @@ Authorization Code + PKCE flow:
 
 ```
 cd pbm-service
-node scripts/get-token.mjs   # port 3000 must be free — stop the dev server first
+node scripts/get-token.mjs   # port 3000 must be free — stop the pbm-ui dev server first
 ```
 
 It opens the Auth0 login page (test user: `candidate@test.com`), catches the callback on

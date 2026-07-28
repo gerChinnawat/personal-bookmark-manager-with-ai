@@ -1,11 +1,27 @@
 import { Box, Typography, IconButton } from '@mui/material'
 import { NavLink } from 'react-router'
+import { useAuth0 } from '@auth0/auth0-react'
 import { navItems } from './navItems'
 
-const USER_EMAIL = 'candidate@test.com'
-const USER_INITIALS = 'CT'
+function initialsFor(name?: string, email?: string): string {
+  const source = name ?? email ?? ''
+  const parts = source.split(/[\s@.]+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join('')
+}
 
 function Sidebar() {
+  const { user, logout } = useAuth0()
+  const userEmail = user?.email ?? user?.name ?? ''
+  const userInitials = initialsFor(user?.name, user?.email)
+
+  const handleSignOut = () => {
+    logout({ logoutParams: { returnTo: window.location.origin } })
+  }
+
   return (
     <Box
       component="nav"
@@ -115,7 +131,7 @@ function Sidebar() {
             flexShrink: 0,
           }}
         >
-          {USER_INITIALS}
+          {userInitials}
         </Box>
         <Typography
           sx={{
@@ -127,9 +143,9 @@ function Sidebar() {
             flexGrow: 1,
           }}
         >
-          {USER_EMAIL}
+          {userEmail}
         </Typography>
-        <IconButton size="small" aria-label="Sign out">
+        <IconButton size="small" aria-label="Sign out" onClick={handleSignOut}>
           <Typography component="span" sx={{ fontSize: 14, color: 'text.secondary' }}>
             ↰
           </Typography>

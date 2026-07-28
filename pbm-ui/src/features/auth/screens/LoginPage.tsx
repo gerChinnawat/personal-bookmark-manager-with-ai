@@ -1,8 +1,18 @@
 import { Box, Button, Paper, Typography } from '@mui/material'
+import { useAuth0 } from '@auth0/auth0-react'
+import { Navigate, useLocation } from 'react-router'
 
 function LoginPage() {
+  const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0()
+  const location = useLocation()
+
   const handleContinueWithAuth0 = () => {
-    // Wired up once Auth0 (Authorization Code + PKCE) integration exists.
+    const returnTo = (location.state as { returnTo?: string } | null)?.returnTo
+    loginWithRedirect({ appState: { returnTo } })
+  }
+
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/" replace />
   }
 
   return (
@@ -59,6 +69,7 @@ function LoginPage() {
           variant="contained"
           fullWidth
           onClick={handleContinueWithAuth0}
+          disabled={isLoading}
         >
           Continue with Auth0
         </Button>

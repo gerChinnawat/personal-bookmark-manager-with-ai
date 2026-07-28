@@ -186,3 +186,34 @@ shell (`src/components/layout/`) and cross-feature utilities (`src/utils/`) are 
 outside this convention since they aren't scoped to one feature.
 
 ---
+
+## ADR-010: Login is pure SPA Authorization Code + PKCE, no backend auth endpoint; API moved to port 3001
+Date: 2026-07-28
+Status: Accepted
+Summary: `pbm-ui`'s login button drives Auth0's Authorization Code + PKCE flow directly from
+the browser (via `@auth0/auth0-react`) with no backend controller involved; `pbm-service`
+moves from port 3000 to 3001 to free 3000 for the Vite dev server, since Auth0's app config
+has a fixed SPA callback of `http://localhost:3000/callback`.
+
+**Context:** The user asked for an "auth controller" on the backend to power the UI login
+button. But the Auth0 client has the password grant disabled (confirmed live, see ADR-002's
+context and `scripts/get-token.mjs`), and `API_DESIGN.md` defines no login endpoint — only
+`GET /me`, which reads claims off an already-issued access token. A backend login controller
+would need either the disabled password grant, or a token-exchange proxy holding a client
+secret — a bigger architectural change than the request implied. Separately, Auth0's
+registered callback for this app is fixed at `http://localhost:3000/callback`, which
+conflicted with `pbm-service` hardcoding its own dev server to port 3000.
+
+**Decision:** Presented the user two options (SPA-only PKCE vs. a backend token-exchange
+proxy); user chose SPA-only PKCE. The frontend redirects straight to Auth0's `/authorize`
+and exchanges the code for tokens itself — no backend involvement in login. To make the
+fixed `:3000/callback` land on the SPA, `pbm-service`'s dev port moves to `3001` (matching
+what `API_DESIGN.md` already stated as the base URL) and Vite's dev server is pinned to
+`3000`.
+
+**Consequences:** No new backend routes or DTOs for auth; `GET /me` remains the only
+identity-related backend endpoint. Anyone running `scripts/get-token.mjs` must now stop the
+`pbm-ui` dev server (not `pbm-service`) to free port 3000, since the script also depends on
+that fixed callback.
+
+---

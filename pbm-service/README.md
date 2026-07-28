@@ -44,7 +44,9 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-Dev server listens on port `3000`.
+Dev server listens on port `3001` — port `3000` is reserved for the `pbm-ui` dev server,
+since Auth0's app config has a fixed SPA callback of `http://localhost:3000/callback`
+(see `DECISIONS.md` ADR-010).
 
 ### Swagger / API docs
 
@@ -57,8 +59,8 @@ $ npm run start:dev
 
 Then open:
 
-- UI: `http://localhost:3000/docs`
-- Raw OpenAPI JSON: `http://localhost:3000/docs-json`
+- UI: `http://localhost:3001/docs`
+- Raw OpenAPI JSON: `http://localhost:3001/docs-json`
 
 Every documented route still goes through the real auth guard — click "Authorize" in the
 UI and paste a token from `scripts/get-token.mjs` to call protected routes from the docs
@@ -78,7 +80,7 @@ login still starts with an empty account.
 ### Getting a token for manual testing
 
 ```bash
-$ node scripts/get-token.mjs   # port 3000 must be free — stop the dev server first
+$ node scripts/get-token.mjs   # port 3000 must be free — stop the pbm-ui dev server first
 ```
 
 Runs a real Authorization Code + PKCE flow against Auth0 and prints the decoded

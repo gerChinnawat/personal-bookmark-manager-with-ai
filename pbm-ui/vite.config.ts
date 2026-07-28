@@ -8,4 +8,9 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  server: {
+    // Auth0's app config has a fixed SPA callback of http://localhost:3000/callback
+    // (see DECISIONS.md ADR-010) — the API runs on 3001 to free this port.
+    port: 3000,
+  },
 })
