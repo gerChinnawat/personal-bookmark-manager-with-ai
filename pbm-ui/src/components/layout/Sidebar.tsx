@@ -54,7 +54,7 @@ function Sidebar() {
           <Box sx={{ width: 10, height: 10, borderRadius: '2px', bgcolor: '#fff' }} />
         </Box>
         <Typography sx={{ fontWeight: 500, fontSize: 15, color: 'text.primary' }}>
-          readlater
+          Readlater
         </Typography>
       </Box>
 

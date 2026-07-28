@@ -6,9 +6,10 @@ interface CollectionCardProps {
   collection: Collection
   onOpen: (id: string) => void
   onShare: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
-function CollectionCard({ collection, onOpen, onShare }: CollectionCardProps) {
+function CollectionCard({ collection, onOpen, onShare, onDelete }: CollectionCardProps) {
   return (
     <Card
       variant="elevation"
@@ -28,7 +29,7 @@ function CollectionCard({ collection, onOpen, onShare }: CollectionCardProps) {
         <Typography variant="h6" component="h3" sx={{ fontSize: 16, fontWeight: 500 }}>
           {collection.name}
         </Typography>
-        <IconButton
+        {/* <IconButton
           size="small"
           aria-label={`Share ${collection.name}`}
           onClick={(event) => {
@@ -39,7 +40,21 @@ function CollectionCard({ collection, onOpen, onShare }: CollectionCardProps) {
           <Typography component="span" sx={{ fontSize: 14 }}>
             ↗
           </Typography>
-        </IconButton>
+        </IconButton> */}
+        {onDelete && (
+          <IconButton
+            size="small"
+            aria-label={`Delete ${collection.name}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onDelete(collection.id)
+            }}
+          >
+            <Typography component="span" sx={{ fontSize: 14 }}>
+              ×
+            </Typography>
+          </IconButton>
+        )}
       </Box>
 
       <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>

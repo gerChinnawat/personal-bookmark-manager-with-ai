@@ -19,10 +19,11 @@ interface CollectionsGridProps {
   collections: Collection[]
   onOpen: (id: string) => void
   onShare: (id: string) => void
+  onDelete: (id: string) => void
   onCreate: () => void
 }
 
-function CollectionsGrid({ status, collections, onOpen, onShare, onCreate }: CollectionsGridProps) {
+function CollectionsGrid({ status, collections, onOpen, onShare, onDelete, onCreate }: CollectionsGridProps) {
   if (status === 'loading') {
     return (
       <Box sx={GRID_SX}>
@@ -62,7 +63,7 @@ function CollectionsGrid({ status, collections, onOpen, onShare, onCreate }: Col
     <Box sx={GRID_SX}>
       {collections.map((collection) => (
         <Box key={collection.id} sx={CARD_WRAPPER_SX}>
-          <CollectionCard collection={collection} onOpen={onOpen} onShare={onShare} />
+          <CollectionCard collection={collection} onOpen={onOpen} onShare={onShare} onDelete={onDelete} />
         </Box>
       ))}
     </Box>

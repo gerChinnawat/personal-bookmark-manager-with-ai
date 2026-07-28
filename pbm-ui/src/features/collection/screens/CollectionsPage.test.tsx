@@ -2,16 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CollectionsPage from './CollectionsPage'
-import { createCollection, fetchCollections } from '../services/collection.service'
+import { createCollection, deleteCollection, fetchCollections } from '../services/collection.service'
 import type { Collection } from '../interfaces/collection.interface'
 
 vi.mock('../services/collection.service', () => ({
   fetchCollections: vi.fn(),
   createCollection: vi.fn(),
+  deleteCollection: vi.fn(),
 }))
 
 const mockedFetchCollections = vi.mocked(fetchCollections)
 const mockedCreateCollection = vi.mocked(createCollection)
+const mockedDeleteCollection = vi.mocked(deleteCollection)
 
 const collection: Collection = {
   id: 'c1',
@@ -65,5 +67,32 @@ describe('CollectionsPage', () => {
     await waitFor(() => expect(mockedCreateCollection).toHaveBeenCalledWith('Reading list'))
     expect(await screen.findByText('Reading list')).toBeInTheDocument()
     expect(mockedFetchCollections).toHaveBeenCalledTimes(2)
+  })
+
+  it('deletes a collection optimistically', async () => {
+    const user = userEvent.setup()
+    mockedFetchCollections.mockResolvedValue([collection])
+    mockedDeleteCollection.mockResolvedValue(undefined)
+
+    render(<CollectionsPage />)
+    await screen.findByText('Reading list')
+
+    await user.click(screen.getByRole('button', { name: 'Delete Reading list' }))
+
+    expect(mockedDeleteCollection).toHaveBeenCalledWith('c1')
+    await waitFor(() => expect(screen.queryByText('Reading list')).not.toBeInTheDocument())
+  })
+
+  it('shows an error when delete fails, after rolling back the optimistic removal', async () => {
+    const user = userEvent.setup()
+    mockedFetchCollections.mockResolvedValue([collection])
+    mockedDeleteCollection.mockRejectedValue(new Error('network error'))
+
+    render(<CollectionsPage />)
+    await screen.findByText('Reading list')
+
+    await user.click(screen.getByRole('button', { name: 'Delete Reading list' }))
+
+    expect(await screen.findByText('Could not delete the collection.')).toBeInTheDocument()
   })
 })

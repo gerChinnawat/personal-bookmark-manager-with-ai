@@ -11,3 +11,7 @@ export async function createCollection(name: string): Promise<Collection> {
   const envelope = await apiService.post<IResponse<Collection>>('/collections', { name })
   return envelope.data
 }
+
+export async function deleteCollection(id: string): Promise<void> {
+  await apiService.delete(`/collections/${id}`)
+}

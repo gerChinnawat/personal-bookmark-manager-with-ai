@@ -9,7 +9,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { createCollection, fetchCollections } from '../services/collection.service'
+import { createCollection, deleteCollection, fetchCollections } from '../services/collection.service'
 import type { Collection } from '../interfaces/collection.interface'
 import CollectionsGrid from '../components/CollectionsGrid'
 
@@ -55,6 +55,15 @@ function CollectionsPage() {
     // Wired up once the Share modal exists.
   }
 
+  const handleDelete = (id: string) => {
+    const previous = collections
+    setCollections((current) => current.filter((collection) => collection.id !== id))
+    deleteCollection(id).catch(() => {
+      setCollections(previous)
+      setError('Could not delete the collection.')
+    })
+  }
+
   const handleDialogClose = () => {
     if (isSaving) return
     setIsDialogOpen(false)
@@ -96,6 +105,7 @@ function CollectionsPage() {
           collections={collections}
           onOpen={handleOpen}
           onShare={handleShare}
+          onDelete={handleDelete}
           onCreate={handleCreate}
         />
       )}

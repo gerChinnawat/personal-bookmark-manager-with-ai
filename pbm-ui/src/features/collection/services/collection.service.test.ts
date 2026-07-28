@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import apiService from '../../../services/api.service'
-import { createCollection, fetchCollections } from './collection.service'
+import { createCollection, deleteCollection, fetchCollections } from './collection.service'
 import type { Collection } from '../interfaces/collection.interface'
 
 vi.mock('../../../services/api.service', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
+    delete: vi.fn(),
   },
 }))
 
@@ -53,6 +54,16 @@ describe('collection.service', () => {
         name: 'Reading list',
       })
       expect(result).toEqual(collection)
+    })
+  })
+
+  describe('deleteCollection', () => {
+    it('DELETEs /collections/:id', async () => {
+      mockedApiService.delete.mockResolvedValue(undefined)
+
+      await deleteCollection('c1')
+
+      expect(mockedApiService.delete).toHaveBeenCalledWith('/collections/c1')
     })
   })
 })
