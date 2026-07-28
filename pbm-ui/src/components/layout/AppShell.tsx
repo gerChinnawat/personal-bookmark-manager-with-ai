@@ -15,6 +15,7 @@ function AppShell() {
         component="main"
         sx={{
           flexGrow: 1,
+          minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',

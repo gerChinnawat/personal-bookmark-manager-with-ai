@@ -54,14 +54,14 @@ function LoginPage() {
         </Box>
 
         <Typography sx={{ fontWeight: 500, fontSize: 15, color: 'text.primary', mb: 3 }}>
-          readlater
+          Readlater
         </Typography>
 
         <Typography variant="h5" component="h1" sx={{ fontSize: 20, fontWeight: 500, mb: 1 }}>
           Sign in
         </Typography>
 
-        <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 3 }}>
+        <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>
           Private bookmarks. Only you can see what you save.
         </Typography>
 
@@ -73,10 +73,6 @@ function LoginPage() {
         >
           Continue with Auth0
         </Button>
-
-        <Typography sx={{ fontSize: 11, color: 'text.disabled', mt: 2 }}>
-          Authorization Code + PKCE · candidate@test.com
-        </Typography>
       </Paper>
     </Box>
   )

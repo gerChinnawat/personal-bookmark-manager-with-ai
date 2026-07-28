@@ -3,9 +3,15 @@ import type { Collection } from '../interfaces/collection.interface'
 import CollectionCard from './CollectionCard'
 
 const GRID_SX = {
-  display: 'grid',
-  gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(240px, 1fr))' },
+  display: { xs: 'flex', sm: 'grid' },
+  gridTemplateColumns: { sm: 'repeat(auto-fill, minmax(240px, 1fr))' },
+  overflowX: { xs: 'auto', sm: 'visible' },
   gap: { xs: '10px', sm: '14px' },
+  pb: { xs: 0.5, sm: 0 },
+}
+
+const CARD_WRAPPER_SX = {
+  flex: { xs: '0 0 220px', sm: 'initial' },
 }
 
 interface CollectionsGridProps {
@@ -21,7 +27,9 @@ function CollectionsGrid({ status, collections, onOpen, onShare, onCreate }: Col
     return (
       <Box sx={GRID_SX}>
         {Array.from({ length: 6 }).map((_, index) => (
-          <Skeleton key={index} variant="rounded" height={110} />
+          <Box key={index} sx={CARD_WRAPPER_SX}>
+            <Skeleton variant="rounded" height={110} />
+          </Box>
         ))}
       </Box>
     )
@@ -53,12 +61,9 @@ function CollectionsGrid({ status, collections, onOpen, onShare, onCreate }: Col
   return (
     <Box sx={GRID_SX}>
       {collections.map((collection) => (
-        <CollectionCard
-          key={collection.id}
-          collection={collection}
-          onOpen={onOpen}
-          onShare={onShare}
-        />
+        <Box key={collection.id} sx={CARD_WRAPPER_SX}>
+          <CollectionCard collection={collection} onOpen={onOpen} onShare={onShare} />
+        </Box>
       ))}
     </Box>
   )
