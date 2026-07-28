@@ -12,8 +12,13 @@ user's data.
 > support `limit`/`cursor`/`sort`/`q`, plus `collectionId`/`uncategorised` on bookmarks;
 > `GET /me` and `GET /collections/:id/bookmarks` are implemented; the shared exception filter
 > of §6 is wired globally. Swagger/OpenAPI docs are served at `GET /docs`, and `npm run
-> db:seed` seeds two example owners' worth of collections/bookmarks. `pbm-ui/` is still
-> empty. This README is corrected as implementation lands if anything changes.
+> db:seed` seeds two example owners' worth of collections/bookmarks. `pbm-ui/` now has a
+> React + Vite + MUI app wired to the real API: Auth0 PKCE login/logout, and Collections,
+> Bookmarks, and an "All" view bound to their respective endpoints (`pbm-ui/src/features/`).
+> `pbm-ui` has a Vitest + React Testing Library suite (`npm test` / `npm run test:run`) covering
+> the pure utils, the service layer, and the Collections/Bookmarks page data-flow (load, empty,
+> error, create, optimistic delete + rollback). This README is corrected as implementation
+> lands if anything changes.
 
 ## Stack
 
@@ -57,6 +62,9 @@ than falling open. Migrations: `npm run db:migrate`. Dev server port: `3001` —
 is reserved for the `pbm-ui` dev server, since Auth0's app config has a fixed SPA callback
 of `http://localhost:3000/callback` (see `DECISIONS.md` ADR-010).
 Security matrix test: `npm run test:security` (Postgres must be up).
+
+`pbm-ui` tests: `cd pbm-ui && npm install && npm run test:run` (Vitest + React Testing
+Library; no backend or Postgres required — services are mocked).
 
 Example data: `npm run db:seed` creates two fabricated owners (`auth0|example-user-1`,
 `auth0|example-user-2`, following the `auth0|test-user-a/b` shape used by the security

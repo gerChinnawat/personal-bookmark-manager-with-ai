@@ -24,9 +24,12 @@ function CollectionsPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const loadCollections = () => {
-    setIsLoading(true)
-    setError(null)
-    fetchCollections()
+    Promise.resolve()
+      .then(() => {
+        setIsLoading(true)
+        setError(null)
+        return fetchCollections()
+      })
       .then((data) => setCollections(data))
       .catch(() => setError('Could not load collections.'))
       .finally(() => setIsLoading(false))

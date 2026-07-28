@@ -32,9 +32,12 @@ function BookmarksPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const loadData = () => {
-    setIsLoading(true)
-    setError(null)
-    Promise.all([fetchBookmarks(), fetchCollections()])
+    Promise.resolve()
+      .then(() => {
+        setIsLoading(true)
+        setError(null)
+        return Promise.all([fetchBookmarks(), fetchCollections()])
+      })
       .then(([bookmarkData, collectionData]) => {
         setBookmarks(bookmarkData)
         setCollections(collectionData)

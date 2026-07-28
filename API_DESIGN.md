@@ -339,11 +339,29 @@ prevents a recurrence. **Only include defects that actually occurred and that ha
   checks cross-owner 404 parity, not success-path status codes. A follow-up would be a
   `.expect(204)` assertion on each resource's own-collection delete test.
 
-### 9.2 `[FILL]`
+### 9.2 `pbm-ui` loader effects called `setState` synchronously, and `lint` wasn't run before landing
 
-### 9.3 `[FILL]`
-
-### 9.2 `[FILL]`
+- **What it produced:** `BookmarksPage.tsx` and `CollectionsPage.tsx` each call a `loadData`/
+  `loadCollections` function from a bare `useEffect(() => { loadData() }, [])`. That function's
+  first two statements were synchronous `setIsLoading(true)`/`setError(null)` calls — flagged by
+  `react-hooks/set-state-in-effect` ("Calling setState() directly within an effect").
+- **Why it looked fine:** The app worked correctly in the browser — React tolerates the extra
+  render this pattern causes — and `npm run build`/`tsc --noEmit` don't run ESLint, so nothing
+  in the commands used while landing the feature (`c33acf6`, `b17e306`, `ca55df6`, `083f671`)
+  would have surfaced it.
+- **Impact if shipped:** Not a functional bug, but exactly the "cascading renders" class of
+  issue the rule exists to catch, and a real signal ignored is worse the more it accumulates.
+- **How it was caught:** `npm run lint` run as part of an explicit audit of the repo against
+  this document, not during feature development.
+- **Fix:** Deferred each loader's initial `setState` calls into a microtask
+  (`Promise.resolve().then(() => { setIsLoading(true); ...; return fetch...() })`) so no
+  `setState` call is synchronous inside the effect body.
+- **Prevented from recurring by:** `pbm-ui` now has a Vitest + React Testing Library suite
+  (`pbm-ui/src/features/collection/screens/CollectionsPage.test.tsx` and
+  `.../bookmark/screens/BookmarksPage.test.tsx`) exercising the same loader path this bug
+  lived in — a future regression in the loader's effect shape would be caught by `npm run
+  test:run` even before `lint` runs. `npm run lint` itself is still not wired into any hook
+  or CI step, so the lint signal alone remains a manual step, not an enforced gate.
 
 ### 9.3 `[FILL]`
 
