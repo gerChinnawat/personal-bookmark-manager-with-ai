@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
 import AppShell from './components/layout/AppShell'
-import AllPage from './pages/AllPage'
+import AllPage from './features/all/screens/AllPage'
 import BookmarksPage from './features/bookmark/screens/BookmarksPage'
 import CollectionsPage from './features/collection/screens/CollectionsPage'
 import LoginPage from './pages/LoginPage'
