@@ -16,9 +16,10 @@ user's data.
 > React + Vite + MUI app wired to the real API: Auth0 PKCE login/logout, and Collections,
 > Bookmarks, and an "All" view bound to their respective endpoints (`pbm-ui/src/features/`).
 > `pbm-ui` has a Vitest + React Testing Library suite (`npm test` / `npm run test:run`) covering
-> the pure utils, the service layer, and the Collections/Bookmarks page data-flow (load, empty,
-> error, create, optimistic delete + rollback). This README is corrected as implementation
-> lands if anything changes.
+> the pure utils, the service layer, the Collections/Bookmarks page data-flow (load, empty,
+> error, create, optimistic delete + rollback), and the auth wiring (`ProtectedRoute`'s
+> loading/authenticated/redirect branches; `api.service.ts`'s token-attachment and 401-handling
+> interceptors). This README is corrected as implementation lands if anything changes.
 
 ## Stack
 
