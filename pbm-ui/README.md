@@ -1,77 +1,74 @@
-# React + TypeScript + Vite
+# pbm-ui
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite + MUI frontend for the Personal Bookmark Manager. Auth0 (Authorization Code +
+PKCE) login/logout, and Collections, Bookmarks, and an "All" view bound to the `pbm-service`
+API. See the repo root `README.md` for the overall project, `API_DESIGN.md` for the API
+contract, and `DECISIONS.md` for ADRs referenced below.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+React 19, Vite, TypeScript, MUI, `@auth0/auth0-react`, `axios`, `react-router`. Tests:
+Vitest + React Testing Library.
 
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Running locally
 
 ```
+cp .env.example .env   # fill in Auth0 domain/client id (see below)
+npm install
+npm run dev             # http://localhost:3000
+```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The dev server is fixed to port `3000` because Auth0's app config has a fixed SPA callback
+of `http://localhost:3000/callback` (`DECISIONS.md` ADR-010) — `pbm-service` runs on `3001`
+to free this port. Start `pbm-service` separately for the UI to have anything to call
+against (see the root `README.md`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Environment variables
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Set in `.env` (see `.env.example`):
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_URL` | Base URL of `pbm-service` (default `http://localhost:3001`) |
+| `VITE_AUTH0_DOMAIN` | Auth0 tenant domain |
+| `VITE_AUTH0_CLIENT_ID` | Auth0 SPA client id |
+| `VITE_AUTH0_AUDIENCE` | Must be `https://bbl-candidate-test-api` — an access token audience, not an ID token (`DECISIONS.md` ADR-002) |
+
+The app throws at startup if any of the Auth0 variables are missing rather than falling
+back silently — see `src/features/auth/providers/Auth0ProviderWithNavigate.tsx`.
+
+Auth0 is configured with `cacheLocation="localstorage"` so the session survives a full page
+reload without depending on a refresh-token grant (`DECISIONS.md` ADR-011).
+
+## Testing
 
 ```
+npm test          # watch mode
+npm run test:run  # single run (CI)
+```
+
+No backend or Postgres is required — the service layer is mocked. Coverage includes the
+pure utils (`src/utils`), the service layer (`src/features/*/services`,
+`src/services/api.service.ts`), Collections/Bookmarks page data-flow (load, empty, error,
+create, optimistic delete + rollback), and auth wiring (`ProtectedRoute`'s
+loading/authenticated/redirect branches; the token-attachment and 401-handling axios
+interceptors).
+
+Other scripts: `npm run lint`, `npm run build`, `npm run preview`.
+
+## Structure
+
+```
+src/
+  components/layout/    AppShell, Sidebar, MobileBottomNav, nav config
+  features/auth/        Auth0 provider, ProtectedRoute, login screen, API auth bridge
+  features/collection/  Collections list — interface, service, screen, components
+  features/bookmark/    Bookmarks list — interface, service, screen, components
+  features/all/         Combined "All" view grouping bookmarks by collection
+  services/api.service.ts   axios instance: attaches the Auth0 access token, handles 401
+  interfaces/           Shared response shapes
+  utils/                 Pure helpers (relative time, URL formatting)
+```
+
+Routing (`src/App.tsx`): `/login` is public; `/collections`, `/bookmarks`, and `/all` are
+behind `ProtectedRoute` and wrapped in `AppShell`; `/` redirects to `/collections`.
