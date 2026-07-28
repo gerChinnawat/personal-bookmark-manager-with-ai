@@ -155,3 +155,34 @@ now means "the array lives at `data`, not at the response root" — a narrower c
 before.
 
 ---
+
+## ADR-009: `pbm-ui` feature folders split into `components/`, `screens/`, `services/`, `interfaces/`
+Date: 2026-07-28
+Status: Accepted
+Summary: Each `pbm-ui` feature under `src/features/<feature>/` is now organized by file role — UI
+components in `components/`, page-level components in `screens/`, API/data-fetching code in
+`services/`, and type/interface definitions in `interfaces/` (with room for further role-based
+folders, e.g. if enums or constants need their own home) — rather than flat files at the feature
+root.
+
+**Context:** The Collections feature had already gone through two prior reshuffles in this
+session (flat files under `src/pages`/`src/components`/`src/api`/`src/types` → a flat
+`src/feature/collection/` → `src/features/collection/` with `components/screens/services/types`
+subfolders). The user then directly renamed `types/collection.ts` to
+`interfaces/collection.interface.ts` and `services/api.ts` to `services/collection.service.ts` in
+the IDE, and asked for this structure to be logged as the decision going forward.
+
+**Decision:** Per explicit user instruction (and the user's own in-IDE renames, not an
+agent-proposed convention): every `pbm-ui` feature folder is split by role —
+`components/` for reusable UI pieces, `screens/` for route-level page components, `services/`
+for API-handling code (named `<feature>.service.ts`), and `interfaces/` for type/interface
+definitions (named `<feature>.interface.ts`). If a feature needs another category of type
+(e.g. enums, DTOs distinct from interfaces), a new role-based folder should be added the same
+way rather than overloading `interfaces/`.
+
+**Consequences:** `src/features/collection/` is the reference example for this layout; Bookmarks,
+All, and Login should follow the same subfolder split as they're built out. The shared layout
+shell (`src/components/layout/`) and cross-feature utilities (`src/utils/`) are intentionally
+outside this convention since they aren't scoped to one feature.
+
+---
