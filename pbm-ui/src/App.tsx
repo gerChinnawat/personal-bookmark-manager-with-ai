@@ -3,7 +3,7 @@ import AppShell from './components/layout/AppShell'
 import AllPage from './features/all/screens/AllPage'
 import BookmarksPage from './features/bookmark/screens/BookmarksPage'
 import CollectionsPage from './features/collection/screens/CollectionsPage'
-import LoginPage from './pages/LoginPage'
+import LoginPage from './features/auth/screens/LoginPage'
 
 function App() {
   return (
