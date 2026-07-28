@@ -91,6 +91,33 @@ export class BookmarkRepository {
     return this.prisma.bookmark.findFirst({ where: { id, ownerId } });
   }
 
+  // Deliberately ownerId-less (CLAUDE.md rule 3 exception, named explicitly):
+  // backs the public share-resolve route, where authorization was already
+  // established one level up by CollectionRepository.findByShareToken.
+  findAllForSharedCollection(
+    collectionId: string,
+    { limit = DEFAULT_LIMIT, cursor, sort = DEFAULT_SORT }: FindAllOptions = {},
+  ): Promise<Bookmark[]> {
+    const direction = sort === 'createdAt:asc' ? 'asc' : 'desc';
+    const where: Prisma.BookmarkWhereInput = { collectionId };
+
+    if (cursor) {
+      const position = decodeCursor(cursor);
+      const cursorCreatedAt = new Date(position.createdAt);
+      const op = direction === 'desc' ? 'lt' : 'gt';
+      where.OR = [
+        { createdAt: { [op]: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, id: { [op]: position.id } },
+      ];
+    }
+
+    return this.prisma.bookmark.findMany({
+      where,
+      orderBy: [{ createdAt: direction }, { id: direction }],
+      take: limit,
+    });
+  }
+
   async update(
     ownerId: string,
     id: string,

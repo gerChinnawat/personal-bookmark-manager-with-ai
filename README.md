@@ -11,7 +11,14 @@ user's data.
 > `PUT` (full replace — omitted optional fields are nulled, not left untouched); list routes
 > support `limit`/`cursor`/`sort`/`q`, plus `collectionId`/`uncategorised` on bookmarks;
 > `GET /me` and `GET /collections/:id/bookmarks` are implemented; the shared exception filter
-> of §6 is wired globally. Swagger/OpenAPI docs are served at `GET /docs`, and `npm run
+> of §6 is wired globally. Collections can be shared via an unauthenticated link the owner
+> toggles on/off (`POST`/`DELETE /collections/:id/share`, public `GET /share/collections/:token`
+> and `.../bookmarks` — see `API_DESIGN.md` §4 and `DECISIONS.md` ADR-012); a disabled or
+> unknown share token 404s identically, with no `ownerId` leakage on the public path. `pbm-ui`
+> has the matching Share dialog (`CollectionsPage` → `ShareDialog`) and an unauthenticated
+> `/share/:token` route (`SharedCollectionPage`) that renders the shared collection's bookmarks
+> read-only — verified live in a browser (enable → link loads unauthenticated → disable → link
+> 404s → re-enable reuses the same token). Swagger/OpenAPI docs are served at `GET /docs`, and `npm run
 > db:seed` seeds two example owners' worth of collections/bookmarks. `pbm-ui/` now has a
 > React + Vite + MUI app wired to the real API: Auth0 PKCE login/logout, and Collections,
 > Bookmarks, and an "All" view bound to their respective endpoints (`pbm-ui/src/features/`).

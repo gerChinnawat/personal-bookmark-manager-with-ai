@@ -23,7 +23,11 @@ const CLIENT_ID = 'H9F6QG5SzTKMv0tbmgxLj9LjG1EKVllA';
 const USER_A = 'auth0|test-user-a';
 const USER_B = 'auth0|test-user-b';
 
-const PUBLIC_ROUTES = new Set(['GET /health']);
+const PUBLIC_ROUTES = new Set([
+  'GET /health',
+  'GET /share/collections/:token',
+  'GET /share/collections/:token/bookmarks',
+]);
 
 describe('Security matrix (e2e)', () => {
   let app: INestApplication;
@@ -613,6 +617,132 @@ describe('Security matrix (e2e)', () => {
       expect(nonexistent.status).toBe(404);
       expect(bodyIgnoringRequestId(crossOwner)).toEqual(
         bodyIgnoringRequestId(nonexistent),
+      );
+    });
+  });
+
+  describe('collection share links', () => {
+    let tokenA: string;
+    let tokenB: string;
+    let collectionId: string;
+    let bookmarkId: string;
+
+    beforeAll(async () => {
+      tokenA = await mint(USER_A);
+      tokenB = await mint(USER_B);
+      const collection = await http()
+        .post('/collections')
+        .set('Authorization', auth(tokenA))
+        .send({ name: 'share-fixture' })
+        .expect(201);
+      collectionId = collection.body.data.id;
+      const bookmark = await http()
+        .post('/bookmarks')
+        .set('Authorization', auth(tokenA))
+        .send({
+          url: 'https://example.com',
+          title: 'share-bookmark',
+          collectionId,
+        })
+        .expect(201);
+      bookmarkId = bookmark.body.data.id;
+    });
+
+    afterAll(async () => {
+      await http()
+        .delete(`/bookmarks/${bookmarkId}`)
+        .set('Authorization', auth(tokenA));
+      await http()
+        .delete(`/collections/${collectionId}`)
+        .set('Authorization', auth(tokenA));
+    });
+
+    it('cross-owner enable/disable → 404 identical to nonexistent id', async () => {
+      const enableCrossOwner = await http()
+        .post(`/collections/${collectionId}/share`)
+        .set('Authorization', auth(tokenB));
+      const enableNonexistent = await http()
+        .post('/collections/nonexistent-id/share')
+        .set('Authorization', auth(tokenB));
+      expect(enableCrossOwner.status).toBe(404);
+      expect(enableNonexistent.status).toBe(404);
+      expect(bodyIgnoringRequestId(enableCrossOwner)).toEqual(
+        bodyIgnoringRequestId(enableNonexistent),
+      );
+
+      const disableCrossOwner = await http()
+        .delete(`/collections/${collectionId}/share`)
+        .set('Authorization', auth(tokenB));
+      expect(disableCrossOwner.status).toBe(404);
+    });
+
+    it('unknown share token → 404, identical whether disabled or nonexistent', async () => {
+      const neverEnabled = await http().get(
+        '/share/collections/nonexistent-token',
+      );
+      const alsoNeverEnabled = await http().get(
+        '/share/collections/another-nonexistent-token',
+      );
+      expect(neverEnabled.status).toBe(404);
+      expect(alsoNeverEnabled.status).toBe(404);
+      expect(bodyIgnoringRequestId(neverEnabled)).toEqual(
+        bodyIgnoringRequestId(alsoNeverEnabled),
+      );
+    });
+
+    it('owner enables sharing, then the link works with no Authorization header', async () => {
+      const enableRes = await http()
+        .post(`/collections/${collectionId}/share`)
+        .set('Authorization', auth(tokenA))
+        .expect(201);
+      const shareToken = enableRes.body.data.shareToken;
+      expect(shareToken).toBeTruthy();
+
+      const resolveRes = await http()
+        .get(`/share/collections/${shareToken}`)
+        .expect(200);
+      expect(resolveRes.body.data.id).toBe(collectionId);
+      expect(resolveRes.body.data.name).toBe('share-fixture');
+      // No owner-identifying or internal fields leak on the public path.
+      expect(resolveRes.body.data.ownerId).toBeUndefined();
+      expect(resolveRes.body.data.shareToken).toBeUndefined();
+
+      const bookmarksRes = await http()
+        .get(`/share/collections/${shareToken}/bookmarks`)
+        .expect(200);
+      expect(
+        bookmarksRes.body.data.map((b: { id: string }) => b.id),
+      ).toContain(bookmarkId);
+      expect(
+        bookmarksRes.body.data.every(
+          (b: { ownerId?: string }) => b.ownerId === undefined,
+        ),
+      ).toBe(true);
+
+      // Re-enabling reuses the same token rather than rotating it.
+      const reEnableRes = await http()
+        .post(`/collections/${collectionId}/share`)
+        .set('Authorization', auth(tokenA))
+        .expect(201);
+      expect(reEnableRes.body.data.shareToken).toBe(shareToken);
+
+      // Disabling turns the same link into a 404 — byte-identical to a
+      // token that was never enabled (no oracle for "did this ever exist").
+      await http()
+        .delete(`/collections/${collectionId}/share`)
+        .set('Authorization', auth(tokenA))
+        .expect(204);
+
+      const disabledRes = await http().get(
+        `/share/collections/${shareToken}`,
+      );
+      const unknownRes = await http().get(
+        '/share/collections/nonexistent-token',
+      );
+      expect(disabledRes.status).toBe(404);
+      expect(unknownRes.status).toBe(404);
+      expect(bodyIgnoringRequestId(disabledRes)).toEqual(
+        bodyIgnoringRequestId(unknownRes),
       );
     });
   });

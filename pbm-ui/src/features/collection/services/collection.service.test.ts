@@ -16,6 +16,8 @@ const mockedApiService = vi.mocked(apiService, true)
 const collection: Collection = {
   id: 'c1',
   name: 'Reading list',
+  shareEnabled: false,
+  shareToken: null,
   createdAt: '2026-07-28T00:00:00.000Z',
   updatedAt: '2026-07-28T00:00:00.000Z',
 }

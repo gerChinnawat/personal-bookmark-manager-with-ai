@@ -3,6 +3,7 @@ import AppShell from './components/layout/AppShell'
 import AllPage from './features/all/screens/AllPage'
 import BookmarksPage from './features/bookmark/screens/BookmarksPage'
 import CollectionsPage from './features/collection/screens/CollectionsPage'
+import SharedCollectionPage from './features/collection/screens/SharedCollectionPage'
 import LoginPage from './features/auth/screens/LoginPage'
 import ProtectedRoute from './features/auth/providers/ProtectedRoute'
 
@@ -10,6 +11,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/share/:token" element={<SharedCollectionPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/collections" replace />} />

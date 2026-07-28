@@ -1,4 +1,5 @@
 import { Box, Card, Chip, IconButton, Typography } from '@mui/material'
+import ClearIcon from '@mui/icons-material/Clear';
 import type { Bookmark } from '../interfaces/bookmark.interface'
 import { formatRelativeTime } from '../../../utils/relativeTime'
 import { getDomain } from '../../../utils/url'
@@ -74,7 +75,7 @@ function BookmarkCard({ bookmark, collectionName, onDelete }: BookmarkCardProps)
             }}
           >
             <Typography component="span" sx={{ fontSize: 14 }}>
-              ×
+              <ClearIcon fontSize='small' />
             </Typography>
           </IconButton>
         )}

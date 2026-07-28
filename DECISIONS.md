@@ -247,3 +247,40 @@ reload-persistence case; revisit if this app ever needs a stricter token-storage
 (e.g. a real refresh-token rotation setup with `useRefreshTokens` + memory cache).
 
 ---
+
+## ADR-012: Collection share links — reusable token, enable/disable toggle, 404-only public route
+Date: 2026-07-29
+Status: Accepted
+Summary: Collections can now be shared via an unauthenticated link the owner can enable or
+disable; the underlying token is generated once and reused across toggles rather than rotated,
+and the public read path is a second `@Public()` exception, authorized by `shareEnabled` being
+part of the DB lookup so a disabled link 404s identically to an unknown one.
+
+**Context:** User asked to let a collection be shared with other users via a link, with the
+ability to enable or disable that link. `pbm-service` had no shareable-link primitive of any
+kind, and CLAUDE.md's rules assume every repository method is `ownerId`-scoped and every route
+requires auth except `GET /health` — a public read path is a deliberate, narrow exception to
+both, not something to reuse existing owner-scoped methods for.
+
+**Decision:** Added `shareEnabled`/`shareToken` to `Collection`. `shareToken` is generated with
+`crypto.randomBytes(24).toString('base64url')` the first time sharing is enabled and reused on
+every later toggle — disabling only flips `shareEnabled` to `false`, it doesn't clear the
+token — so a link an owner already shared keeps working if they turn sharing back on. Rotating
+the token on every enable was rejected: it would silently break a link already handed out.
+Owner-only `POST/DELETE /collections/:id/share` are `ownerId`-scoped like every other write,
+404 (not 403) cross-owner. The public read path, `GET /share/collections/:token` and
+`GET /share/collections/:token/bookmarks`, is the second `@Public()` route after `GET /health`;
+its repository lookups (`CollectionRepository.findByShareToken`,
+`BookmarkRepository.findAllForSharedCollection`) are the one explicit, commented exception to
+"every repo method takes ownerId first" — authorization is `shareEnabled` living inside the
+Prisma `where` clause itself, so disabled and unknown tokens are byte-identical 404s. No link
+expiry was built — out of scope for what was asked.
+
+**Consequences:** Same commit adds the Prisma migration, a "collection share links" block in
+`security-matrix.e2e-spec.ts` (cross-owner 404s, disabled-vs-unknown-token 404 parity, no
+`ownerId`/`shareToken` leakage on the public path) plus the two new routes added to
+`PUBLIC_ROUTES`, and unit tests for the new repository/service methods. If link expiry or
+per-link revocation without losing the "same link on re-enable" property is ever wanted, that's
+a distinct follow-up, not covered here.
+
+---

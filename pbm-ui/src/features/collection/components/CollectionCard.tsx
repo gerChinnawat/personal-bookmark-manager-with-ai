@@ -1,4 +1,6 @@
 import { Box, Card, IconButton, Typography } from '@mui/material'
+import ShareIcon from '@mui/icons-material/Share'
+import ClearIcon from '@mui/icons-material/Clear';
 import type { Collection } from '../interfaces/collection.interface'
 import { formatRelativeTime } from '../../../utils/relativeTime'
 
@@ -29,32 +31,34 @@ function CollectionCard({ collection, onOpen, onShare, onDelete }: CollectionCar
         <Typography variant="h6" component="h3" sx={{ fontSize: 16, fontWeight: 500 }}>
           {collection.name}
         </Typography>
-        {/* <IconButton
-          size="small"
-          aria-label={`Share ${collection.name}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onShare(collection.id)
-          }}
-        >
-          <Typography component="span" sx={{ fontSize: 14 }}>
-            ↗
-          </Typography>
-        </IconButton> */}
-        {onDelete && (
+        <div>
           <IconButton
             size="small"
-            aria-label={`Delete ${collection.name}`}
+            aria-label={`Share ${collection.name}`}
             onClick={(event) => {
               event.stopPropagation()
-              onDelete(collection.id)
+              onShare(collection.id)
             }}
           >
-            <Typography component="span" sx={{ fontSize: 14 }}>
-              ×
+            <Typography component="span" sx={{ fontSize: 7 }}>
+              <ShareIcon fontSize="small" />
             </Typography>
           </IconButton>
-        )}
+          {onDelete && (
+            <IconButton
+              size="small"
+              aria-label={`Delete ${collection.name}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onDelete(collection.id)
+              }}
+            >
+              <Typography component="span" sx={{ fontSize: 7 }}>
+                <ClearIcon fontSize="small" />
+              </Typography>
+            </IconButton>
+          )}
+        </div>
       </Box>
 
       <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>

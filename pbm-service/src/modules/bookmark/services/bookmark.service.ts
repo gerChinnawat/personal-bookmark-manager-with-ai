@@ -111,4 +111,26 @@ export class BookmarkService {
     const removed = await this.bookmarkRepository.remove(ownerId, id);
     if (!removed) throw new NotFoundException(NOT_FOUND_MESSAGE);
   }
+
+  // Public route (no ownerId): the caller already resolved the share token
+  // to this collectionId via CollectionService.resolveShare, which is the
+  // authorization check for this whole path.
+  async findAllForSharedCollection(
+    collectionId: string,
+    options: FindAllOptions,
+  ): Promise<BookmarkListResult> {
+    const limit = options.limit ?? 25;
+    const found = await this.bookmarkRepository.findAllForSharedCollection(
+      collectionId,
+      options,
+    );
+    const nextCursor =
+      found.length === limit
+        ? encodeCursor({
+            createdAt: found[found.length - 1].createdAt.toISOString(),
+            id: found[found.length - 1].id,
+          })
+        : undefined;
+    return { items: found.map(omitOwnerId), nextCursor };
+  }
 }

@@ -83,6 +83,17 @@ export class CollectionController {
     return this.collectionManager.remove(ownerId, id);
   }
 
+  @Post(':id/share')
+  enableShare(@CurrentUser() ownerId: string, @Param('id') id: string) {
+    return this.collectionManager.enableShare(ownerId, id);
+  }
+
+  @Delete(':id/share')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  disableShare(@CurrentUser() ownerId: string, @Param('id') id: string) {
+    return this.collectionManager.disableShare(ownerId, id);
+  }
+
   @Get(':id/bookmarks')
   async findBookmarks(
     @CurrentUser() ownerId: string,

@@ -78,4 +78,33 @@ export class CollectionService {
     const removed = await this.collectionRepository.remove(ownerId, id);
     if (!removed) throw new NotFoundException(NOT_FOUND_MESSAGE);
   }
+
+  async enableShare(ownerId: string, id: string) {
+    const updated = await this.collectionRepository.setShareEnabled(
+      ownerId,
+      id,
+      true,
+    );
+    if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);
+    return { shareToken: updated.shareToken };
+  }
+
+  async disableShare(ownerId: string, id: string) {
+    const updated = await this.collectionRepository.setShareEnabled(
+      ownerId,
+      id,
+      false,
+    );
+    if (!updated) throw new NotFoundException(NOT_FOUND_MESSAGE);
+  }
+
+  // Public route (no ownerId): resolves a share link to the collection it
+  // points at. findByShareToken already filters on shareEnabled, so a
+  // disabled link 404s identically to an unknown one (API_DESIGN.md §2/§4).
+  async resolveShare(token: string) {
+    const found = await this.collectionRepository.findByShareToken(token);
+    if (!found) throw new NotFoundException(NOT_FOUND_MESSAGE);
+    const { ownerId: _ownerId, shareToken: _shareToken, ...rest } = found;
+    return rest;
+  }
 }

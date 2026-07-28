@@ -210,4 +210,80 @@ describe('CollectionRepository', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('setShareEnabled', () => {
+    it('generates a token and enables sharing when none exists yet', async () => {
+      prisma.collection.findFirst
+        .mockResolvedValueOnce({ id: '1', shareToken: null })
+        .mockResolvedValueOnce({ id: '1', shareEnabled: true, shareToken: 'gen' });
+      prisma.collection.updateMany.mockResolvedValue({ count: 1 });
+
+      await repository.setShareEnabled(OWNER_ID, '1', true);
+
+      const call = prisma.collection.updateMany.mock.calls[0][0];
+      expect(call.where).toEqual({ id: '1', ownerId: OWNER_ID });
+      expect(call.data.shareEnabled).toBe(true);
+      expect(typeof call.data.shareToken).toBe('string');
+      expect(call.data.shareToken.length).toBeGreaterThan(0);
+    });
+
+    it('reuses the existing token when enabling again', async () => {
+      prisma.collection.findFirst
+        .mockResolvedValueOnce({ id: '1', shareToken: 'existing-token' })
+        .mockResolvedValueOnce({ id: '1', shareEnabled: true, shareToken: 'existing-token' });
+      prisma.collection.updateMany.mockResolvedValue({ count: 1 });
+
+      await repository.setShareEnabled(OWNER_ID, '1', true);
+
+      expect(prisma.collection.updateMany).toHaveBeenCalledWith({
+        where: { id: '1', ownerId: OWNER_ID },
+        data: { shareEnabled: true, shareToken: 'existing-token' },
+      });
+    });
+
+    it('returns null without writing when the collection is not the caller\'s (enable)', async () => {
+      prisma.collection.findFirst.mockResolvedValueOnce(null);
+
+      const result = await repository.setShareEnabled(OTHER_ID, '1', true);
+
+      expect(result).toBeNull();
+      expect(prisma.collection.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('disables sharing without touching the token', async () => {
+      prisma.collection.updateMany.mockResolvedValue({ count: 1 });
+      prisma.collection.findFirst.mockResolvedValueOnce({
+        id: '1',
+        shareEnabled: false,
+      });
+
+      await repository.setShareEnabled(OWNER_ID, '1', false);
+
+      expect(prisma.collection.updateMany).toHaveBeenCalledWith({
+        where: { id: '1', ownerId: OWNER_ID },
+        data: { shareEnabled: false },
+      });
+    });
+
+    it('returns null when disabling matches no row (wrong owner or missing id)', async () => {
+      prisma.collection.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await repository.setShareEnabled(OTHER_ID, '1', false);
+
+      expect(result).toBeNull();
+      expect(prisma.collection.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findByShareToken', () => {
+    it('looks up by token scoped to shareEnabled=true, with no ownerId', async () => {
+      prisma.collection.findFirst.mockResolvedValue({ id: '1' });
+
+      await repository.findByShareToken('some-token');
+
+      expect(prisma.collection.findFirst).toHaveBeenCalledWith({
+        where: { shareToken: 'some-token', shareEnabled: true },
+      });
+    });
+  });
 });

@@ -27,3 +27,11 @@ export async function createBookmark(input: CreateBookmarkInput): Promise<Bookma
 export async function deleteBookmark(id: string): Promise<void> {
   await apiService.delete(`/bookmarks/${id}`)
 }
+
+export async function fetchSharedBookmarks(token: string): Promise<Bookmark[]> {
+  const envelope = await apiService.get<IResponse<Bookmark[]>>(
+    `/share/collections/${token}/bookmarks`,
+    { params: { limit: 100 } },
+  )
+  return envelope.data
+}

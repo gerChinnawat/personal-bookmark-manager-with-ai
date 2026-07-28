@@ -1,10 +1,12 @@
 model Collection {
-  id        String     @id @default(uuid())
-  ownerId   String
-  name      String
-  bookmarks Bookmark[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id            String     @id @default(uuid())
+  ownerId       String
+  name          String
+  bookmarks     Bookmark[]
+  shareEnabled  Boolean    @default(false)
+  shareToken    String?    @unique
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   @@index([ownerId, createdAt])
   @@map("collections")

@@ -33,4 +33,16 @@ export class CollectionManager {
   remove(ownerId: string, id: string) {
     return this.collectionService.remove(ownerId, id);
   }
+
+  enableShare(ownerId: string, id: string) {
+    return this.collectionService.enableShare(ownerId, id);
+  }
+
+  disableShare(ownerId: string, id: string) {
+    return this.collectionService.disableShare(ownerId, id);
+  }
+
+  resolveShare(token: string) {
+    return this.collectionService.resolveShare(token);
+  }
 }

@@ -23,6 +23,8 @@ describe('CollectionService', () => {
     findOne: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
+    setShareEnabled: jest.Mock;
+    findByShareToken: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -32,6 +34,8 @@ describe('CollectionService', () => {
       findOne: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      setShareEnabled: jest.fn(),
+      findByShareToken: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -170,6 +174,76 @@ describe('CollectionService', () => {
       repository.remove.mockResolvedValue(false);
 
       await expect(service.remove(OWNER_ID, 'missing')).rejects.toThrow(
+        new NotFoundException('Collection not found'),
+      );
+    });
+  });
+
+  describe('enableShare', () => {
+    it('returns the shareToken from the updated row', async () => {
+      repository.setShareEnabled.mockResolvedValue(
+        makeCollection({ shareEnabled: true, shareToken: 'tok-123' }),
+      );
+
+      const result = await service.enableShare(OWNER_ID, '1');
+
+      expect(repository.setShareEnabled).toHaveBeenCalledWith(
+        OWNER_ID,
+        '1',
+        true,
+      );
+      expect(result).toEqual({ shareToken: 'tok-123' });
+    });
+
+    it('throws NotFoundException with the fixed message when the repository returns null', async () => {
+      repository.setShareEnabled.mockResolvedValue(null);
+
+      await expect(service.enableShare(OWNER_ID, 'missing')).rejects.toThrow(
+        new NotFoundException('Collection not found'),
+      );
+    });
+  });
+
+  describe('disableShare', () => {
+    it('resolves without throwing when the repository disables sharing', async () => {
+      repository.setShareEnabled.mockResolvedValue(makeCollection());
+
+      await expect(
+        service.disableShare(OWNER_ID, '1'),
+      ).resolves.toBeUndefined();
+      expect(repository.setShareEnabled).toHaveBeenCalledWith(
+        OWNER_ID,
+        '1',
+        false,
+      );
+    });
+
+    it('throws NotFoundException with the fixed message when the repository returns null', async () => {
+      repository.setShareEnabled.mockResolvedValue(null);
+
+      await expect(
+        service.disableShare(OWNER_ID, 'missing'),
+      ).rejects.toThrow(new NotFoundException('Collection not found'));
+    });
+  });
+
+  describe('resolveShare', () => {
+    it('omits ownerId and shareToken from the resolved collection', async () => {
+      repository.findByShareToken.mockResolvedValue(
+        makeCollection({ shareEnabled: true, shareToken: 'tok-123' }),
+      );
+
+      const result = await service.resolveShare('tok-123');
+
+      expect(result).not.toHaveProperty('ownerId');
+      expect(result).not.toHaveProperty('shareToken');
+      expect(result).toMatchObject({ id: '1', name: 'Recipes' });
+    });
+
+    it('throws a fixed-message NotFoundException — identical for unknown and disabled tokens', async () => {
+      repository.findByShareToken.mockResolvedValue(null);
+
+      await expect(service.resolveShare('bad-token')).rejects.toThrow(
         new NotFoundException('Collection not found'),
       );
     });

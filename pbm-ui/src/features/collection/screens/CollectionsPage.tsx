@@ -12,6 +12,7 @@ import {
 import { createCollection, deleteCollection, fetchCollections } from '../services/collection.service'
 import type { Collection } from '../interfaces/collection.interface'
 import CollectionsGrid from '../components/CollectionsGrid'
+import ShareDialog from '../components/ShareDialog'
 
 function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([])
@@ -22,6 +23,8 @@ function CollectionsPage() {
   const [newName, setNewName] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  const [shareCollectionId, setShareCollectionId] = useState<string | null>(null)
 
   const loadCollections = () => {
     Promise.resolve()
@@ -51,8 +54,13 @@ function CollectionsPage() {
   }
 
   const handleShare = (id: string) => {
-    void id
-    // Wired up once the Share modal exists.
+    setShareCollectionId(id)
+  }
+
+  const handleShareChange = (id: string, patch: Partial<Collection>) => {
+    setCollections((current) =>
+      current.map((collection) => (collection.id === id ? { ...collection, ...patch } : collection)),
+    )
   }
 
   const handleDelete = (id: string) => {
@@ -141,6 +149,12 @@ function CollectionsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ShareDialog
+        collection={collections.find((collection) => collection.id === shareCollectionId) ?? null}
+        onClose={() => setShareCollectionId(null)}
+        onChange={handleShareChange}
+      />
     </Box>
   )
 }

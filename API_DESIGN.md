@@ -40,11 +40,13 @@ user-driven; script: agent-written on instruction.)
 ### Route protection
 
 A global guard denies by default. Every route is authenticated unless explicitly marked
-`@Public()`, and the only public route is:
+`@Public()`. The public routes are:
 
 | Route | Why it is public |
 | --- | --- |
 | `GET /health` | liveness probe, returns no data |
+| `GET /share/collections/:token` | resolves a collection share link; gated by `shareEnabled` in the DB lookup itself, not by auth (see §4, §7) |
+| `GET /share/collections/:token/bookmarks` | bookmarks for a shared collection, same gating |
 
 ---
 
@@ -90,6 +92,8 @@ This also constrains timing and error text — see §6.
 | `id` | `string` (`uuid`) | non-sequential by design — sequential ids leak volume and adjacency across owners |
 | `name` | `string` | 1–100 chars, required |
 | `ownerId` | `string` | server-assigned from token `sub`; **never accepted from the client on any verb** |
+| `shareEnabled` | `boolean` | default `false`; toggled only via `POST`/`DELETE /collections/:id/share`, never accepted directly on `PUT`/`PATCH` |
+| `shareToken` | `string \| null` | server-generated (`crypto.randomBytes(24).toString('base64url')`) on first enable, reused across later toggles — see DECISIONS.md ADR-012. **Never serialised** (same rationale as `ownerId`, below) except as the literal path segment the caller already holds |
 | `createdAt` / `updatedAt` | ISO 8601 | server-assigned |
 
 ### Bookmark
@@ -123,6 +127,10 @@ internal identifier for no client benefit.
 | `PATCH` | `/collections/:id` | 200 | 400, 401, 404 | partial; unknown keys rejected, not ignored |
 | `DELETE` | `/collections/:id` | 204 | 401, 404 | see §7 for effect on bookmarks |
 | `GET` | `/collections/:id/bookmarks` | 200 | 401, 404 | **404 if the collection is not the caller's** — not an empty list |
+| `POST` | `/collections/:id/share` | 201 | 401, 404 | enables sharing, returns `{ shareToken }`; reuses the existing token if already generated |
+| `DELETE` | `/collections/:id/share` | 204 | 401, 404 | disables sharing; `shareToken` is kept (not cleared), so re-enabling reuses the same link |
+| `GET` | `/share/collections/:token` | 200 | 404 | **public, no auth** — 404 if the token is unknown or sharing is disabled, byte-identical either way |
+| `GET` | `/share/collections/:token/bookmarks` | 200 | 404 | **public, no auth** — same 404 semantics as above; see §5 for list params |
 | `GET` | `/bookmarks` | 200 | 401 | |
 | `POST` | `/bookmarks` | 201 | 400, 401, 404 | 404 if `collectionId` refers to a collection the caller does not own |
 | `GET` | `/bookmarks/:id` | 200 | 401, 404 | |
@@ -143,7 +151,8 @@ implementations miss.
 
 ## 5. List parameters
 
-Applies to `GET /collections`, `GET /bookmarks`, `GET /collections/:id/bookmarks`.
+Applies to `GET /collections`, `GET /bookmarks`, `GET /collections/:id/bookmarks`,
+`GET /share/collections/:token/bookmarks`.
 
 | Param | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -273,7 +282,7 @@ Four independent layers. Any one of them failing alone does not breach the invar
 | # | Layer | Mechanism | Proof |
 | --- | --- | --- | --- |
 | 1 | Authentication | global deny-by-default guard (`pbm-service/src/modules/auth/jwt-auth.guard.ts`, registered as `APP_GUARD` in `auth.module.ts`); `ownerId` from verified `sub` only (`current-user.decorator.ts`) | `pbm-service/test/security-matrix.e2e-spec.ts` — 6 invalid auth states × every registered protected route → 401 |
-| 2 | Data access | every Prisma call lives in a repository layer (`pbm-service/src/database/<entity>/<entity>.repository.ts`, one per model); every method takes `ownerId` as its first parameter and includes it in `where`. Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries: `PrismaService` (`pbm-service/src/database/prisma.service.ts`) is provided by `PrismaModule` (`pbm-service/src/database/prisma.module.ts`) and not exported from it; only repository classes registered in that same module are exported | `pbm-service/src/database/collection/collection.repository.ts`, `pbm-service/src/database/bookmark/bookmark.repository.ts` (every method takes `ownerId` first and scopes `where` on it); exercised by the cross-owner 404 and list-scoping cases in `test/security-matrix.e2e-spec.ts` |
+| 2 | Data access | every Prisma call lives in a repository layer (`pbm-service/src/database/<entity>/<entity>.repository.ts`, one per model); every method takes `ownerId` as its first parameter and includes it in `where`, **with one named exception**: `CollectionRepository.findByShareToken` and `BookmarkRepository.findAllForSharedCollection` back the public share-resolve route and are deliberately `ownerId`-less, authorized instead by `shareEnabled` being part of the `where` clause (DECISIONS.md ADR-012). Controllers and services cannot reach `PrismaService` directly — enforced by module boundaries: `PrismaService` (`pbm-service/src/database/prisma.service.ts`) is provided by `PrismaModule` (`pbm-service/src/database/prisma.module.ts`) and not exported from it; only repository classes registered in that same module are exported | `pbm-service/src/database/collection/collection.repository.ts`, `pbm-service/src/database/bookmark/bookmark.repository.ts` (every method takes `ownerId` first and scopes `where` on it, except the two named above); exercised by the cross-owner 404, list-scoping, and share-link cases in `test/security-matrix.e2e-spec.ts` |
 | 3 | Write validation | `ownerId` is not a field on any inbound DTO, so it cannot be assigned by a client regardless of body content (global `ValidationPipe` with `forbidNonWhitelisted` rejects it with 400); referenced `collectionId` is ownership-checked before use (`bookmark.service.ts`'s `assertOwnsCollection`, called on create and on update when `collectionId` is set) | "ownerId in a request body → 400" case, plus the `POST`/`PATCH /bookmarks` cross-owner `collectionId` cases, in `test/security-matrix.e2e-spec.ts` |
 | 4 | Response policy | uniform 404, fixed error strings, no cross-owner values in messages, all wrapped by the single exception filter of §6 (`pbm-service/src/common/filters/all-exceptions.filter.ts`) | cross-owner vs nonexistent 404s asserted **structurally identical, ignoring the per-request `requestId`** in `test/security-matrix.e2e-spec.ts` |
 
@@ -303,9 +312,13 @@ never leak the other user's rows; `collectionId` pointing at another owner's col
 rejected with 404 on `POST`, `PATCH`, and `PUT /bookmarks`, and on the `collectionId` list
 filter; `PUT` nulls omitted optional fields rather than leaving them untouched; and
 `GET /collections/:id/bookmarks` 404s (not an empty list) when the collection isn't the
-caller's. Current count: 15 registered routes (7 collection + 6 bookmark + `/me` +
-`/health`), 41 test cases, 84 sweep assertions (6 auth states × 14 protected routes). Routes
-are enumerated, not listed by hand — a route added later joins the 401 sweep automatically.
+caller's; a disabled or unknown collection share token 404s identically, with no
+`ownerId`/`shareToken` leakage on the public path. Current count: 19 registered routes
+(9 collection incl. the two owner-only share routes + 6 bookmark + `/me` + `/health` + the
+two public share-resolve routes), 44 test cases, 96 sweep assertions (6 auth states × 16
+protected routes — the two public share routes are excluded from the sweep, same as
+`/health`). Routes are enumerated, not listed by hand — a route added later joins the 401
+sweep automatically.
 
 The value of a matrix test over hand-written cases is that a route added later is covered
 automatically — the endpoint someone forgets to write a test for is exactly the one that leaks.

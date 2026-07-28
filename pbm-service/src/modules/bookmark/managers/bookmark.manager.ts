@@ -31,4 +31,11 @@ export class BookmarkManager {
   remove(ownerId: string, id: string) {
     return this.bookmarkService.remove(ownerId, id);
   }
+
+  findAllForSharedCollection(collectionId: string, query: FindAllOptions) {
+    return this.bookmarkService.findAllForSharedCollection(
+      collectionId,
+      query,
+    );
+  }
 }

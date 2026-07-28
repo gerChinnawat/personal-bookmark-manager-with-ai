@@ -15,3 +15,19 @@ export async function createCollection(name: string): Promise<Collection> {
 export async function deleteCollection(id: string): Promise<void> {
   await apiService.delete(`/collections/${id}`)
 }
+
+export async function enableShare(id: string): Promise<{ shareToken: string }> {
+  const envelope = await apiService.post<IResponse<{ shareToken: string }>>(
+    `/collections/${id}/share`,
+  )
+  return envelope.data
+}
+
+export async function disableShare(id: string): Promise<void> {
+  await apiService.delete(`/collections/${id}/share`)
+}
+
+export async function fetchSharedCollection(token: string): Promise<Collection> {
+  const envelope = await apiService.get<IResponse<Collection>>(`/share/collections/${token}`)
+  return envelope.data
+}
