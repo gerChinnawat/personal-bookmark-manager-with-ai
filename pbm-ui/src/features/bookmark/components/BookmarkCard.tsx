@@ -1,14 +1,17 @@
-import { Box, Card, Chip, Typography } from '@mui/material'
+import { Box, Card, Chip, IconButton, Typography } from '@mui/material'
 import type { Bookmark } from '../interfaces/bookmark.interface'
 import { formatRelativeTime } from '../../../utils/relativeTime'
+import { getDomain } from '../../../utils/url'
 
 interface BookmarkCardProps {
   bookmark: Bookmark
   collectionName?: string
+  onDelete?: (id: string) => void
 }
 
-function BookmarkCard({ bookmark, collectionName }: BookmarkCardProps) {
-  const initial = (bookmark.domain || '?').charAt(0).toUpperCase()
+function BookmarkCard({ bookmark, collectionName, onDelete }: BookmarkCardProps) {
+  const domain = getDomain(bookmark.url)
+  const initial = (domain || '?').charAt(0).toUpperCase()
 
   return (
     <Card
@@ -55,10 +58,26 @@ function BookmarkCard({ bookmark, collectionName }: BookmarkCardProps) {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            flexGrow: 1,
           }}
         >
-          {bookmark.domain}
+          {domain}
         </Typography>
+        {onDelete && (
+          <IconButton
+            size="small"
+            aria-label={`Delete ${bookmark.title}`}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onDelete(bookmark.id)
+            }}
+          >
+            <Typography component="span" sx={{ fontSize: 14 }}>
+              ×
+            </Typography>
+          </IconButton>
+        )}
       </Box>
 
       <Typography

@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -66,6 +68,7 @@ export class BookmarkController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() ownerId: string, @Param('id') id: string) {
     return this.bookmarkManager.remove(ownerId, id);
   }

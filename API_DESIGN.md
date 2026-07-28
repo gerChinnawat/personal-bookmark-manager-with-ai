@@ -317,18 +317,31 @@ automatically — the endpoint someone forgets to write a test for is exactly th
 Three real defects introduced by the coding agent, with how each was caught and what now
 prevents a recurrence. **Only include defects that actually occurred and that have a commit.**
 
-**Deferred: no code has been written yet** (`pbm-service/` and `pbm-ui/` are both empty as
-of this update). This section stays templated until implementation is underway and real
-defects — with commits — exist to report. Do not fill it with hypothetical defects.
+### 9.1 `DELETE` routes returned 200 instead of the documented 204
 
-### 9.1 `[FILL: title]`
+- **What it produced:** `bookmark.controller.ts` and `collection.controller.ts`'s `@Delete(':id')`
+  handlers had no `@HttpCode(...)` decorator, so Nest's default (200) applied instead of the
+  204 this doc specifies in §2 ("Deleted | 204 | empty — no envelope").
+- **Why it looked fine:** The handlers return `undefined` either way, so the response body was
+  correctly empty and every functional test (including the security-matrix cross-owner 404
+  checks) passed — nothing in the test suite asserted the *status code* of a successful delete,
+  only of the error cases.
+- **Impact if shipped:** A client relying on the documented contract (`204` = deleted,
+  bodyless) to distinguish success from an unexpected `200`-with-body would work today but
+  silently diverge from the documented contract, and 204 vs 200 matters to some HTTP
+  middleware/caches that treat them differently.
+- **How it was caught:** Live-testing the `pbm-ui` bookmark delete button against the running
+  API while binding the Bookmarks feature (not a written test) — `DELETE /bookmarks/:id`
+  came back `200` when the network inspector was checked.
+- **Fix:** Added `@HttpCode(HttpStatus.NO_CONTENT)` to both `@Delete(':id')` handlers, in the
+  same session as the `pbm-ui` bookmark API binding (commit lands alongside this doc update).
+- **Prevented from recurring by:** No automated regression yet — the security-matrix suite
+  checks cross-owner 404 parity, not success-path status codes. A follow-up would be a
+  `.expect(204)` assertion on each resource's own-collection delete test.
 
-- **What it produced:** `[FILL: the wrong code, quoted]`
-- **Why it looked fine:** `[FILL: compiled, passed the happy-path test, matched the surrounding style…]`
-- **Impact if shipped:** `[FILL: name the concrete breach]`
-- **How it was caught:** `[FILL: which test failed / which review step / the CI gate]`
-- **Fix:** `[FILL: commit sha + one line]`
-- **Prevented from recurring by:** `[FILL: the rule in CLAUDE.md, the test, the hook — name it]`
+### 9.2 `[FILL]`
+
+### 9.3 `[FILL]`
 
 ### 9.2 `[FILL]`
 

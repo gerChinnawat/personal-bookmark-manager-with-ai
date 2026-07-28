@@ -1,9 +1,9 @@
 export interface Bookmark {
   id: string
   title: string
-  domain: string
   url: string
-  notes?: string
-  collectionId?: string
+  notes?: string | null
+  collectionId?: string | null
+  createdAt: string
   updatedAt: string
 }

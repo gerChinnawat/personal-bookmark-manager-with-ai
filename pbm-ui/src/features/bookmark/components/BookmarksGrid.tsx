@@ -12,9 +12,10 @@ interface BookmarksGridProps {
   status: 'loading' | 'empty' | 'data'
   bookmarks: Bookmark[]
   collectionNameById: Map<string, string>
+  onDelete?: (id: string) => void
 }
 
-function BookmarksGrid({ status, bookmarks, collectionNameById }: BookmarksGridProps) {
+function BookmarksGrid({ status, bookmarks, collectionNameById, onDelete }: BookmarksGridProps) {
   if (status === 'loading') {
     return (
       <Box sx={GRID_SX}>
@@ -52,6 +53,7 @@ function BookmarksGrid({ status, bookmarks, collectionNameById }: BookmarksGridP
           key={bookmark.id}
           bookmark={bookmark}
           collectionName={bookmark.collectionId ? collectionNameById.get(bookmark.collectionId) : undefined}
+          onDelete={onDelete}
         />
       ))}
     </Box>

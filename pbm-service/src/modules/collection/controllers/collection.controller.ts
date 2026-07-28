@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -76,6 +78,7 @@ export class CollectionController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() ownerId: string, @Param('id') id: string) {
     return this.collectionManager.remove(ownerId, id);
   }
