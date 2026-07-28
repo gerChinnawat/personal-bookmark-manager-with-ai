@@ -53,6 +53,29 @@ transcripts/   Raw session logs (auto-saved via .claude/hooks/save_transcript.py
 | `AI_WORKFLOW.md` | How this repo was actually built with coding agents, including failures and how they were caught/recovered |
 | `CLAUDE.md` | Rules the coding agent must follow while implementing this repo (repository-layer access, `ownerId` handling, etc.) |
 
+## Scope: completed vs skipped
+
+### Completed
+
+- **`pbm-service`**: full CRUD on `Collection` and `Bookmark` (including `PUT` full-replace
+  semantics), `GET /me`, `GET /collections/:id/bookmarks`, list filtering/pagination
+  (`limit`/`cursor`/`sort`/`q`, plus `collectionId`/`uncategorised` on bookmarks), global
+  deny-by-default auth guard, repository-layer-only Prisma access, the shared exception
+  filter (`API_DESIGN.md` §6), and collection share links (enable/disable, public
+  unauthenticated resolve route — `DECISIONS.md` ADR-012).
+- **Security matrix**: `test/security-matrix.e2e-spec.ts` sweeps every registered route
+  against invalid-auth states and cross-owner access (404-not-403 parity, no `ownerId`
+  leakage) — landed alongside each endpoint, not as a follow-up (`API_DESIGN.md` §8).
+- **`pbm-ui`**: Auth0 PKCE login/logout, `/collections`, `/bookmarks`, `/all`, and the
+  unauthenticated `/share/:token` view, all wired to the real API.
+- **Tests**: `pbm-service` unit tests (repository/service layers) plus the security
+  matrix; `pbm-ui` Vitest + RTL suite covering pure utils, the service layer,
+  Collections/Bookmarks page data-flow (load/empty/error/create/optimistic-delete-with-rollback),
+  and auth wiring (`ProtectedRoute` branches, `api.service.ts` token/401 interceptors).
+- **Docs**: `API_DESIGN.md`, `DECISIONS.md`, `AI_WORKFLOW.md`, `CLAUDE.md`, `transcripts/`,
+  this README — kept in sync with the code in the same commit, per `CLAUDE.md`'s process rule.
+
+
 ## Running locally
 
 ```
