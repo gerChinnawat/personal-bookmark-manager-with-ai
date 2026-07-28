@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router'
 import AppShell from './components/layout/AppShell'
 import AllPage from './pages/AllPage'
-import BookmarksPage from './pages/BookmarksPage'
+import BookmarksPage from './features/bookmark/screens/BookmarksPage'
 import CollectionsPage from './features/collection/screens/CollectionsPage'
 import LoginPage from './pages/LoginPage'
 
