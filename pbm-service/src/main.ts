@@ -9,6 +9,16 @@ import { ResponseEnvelopeInterceptor } from './common/interceptors/response-enve
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // pbm-ui runs on a different origin (Vite dev server, :3000) from the API
+  // (:3001) — no CORS config means the browser blocks every cross-origin
+  // call at the preflight. Bearer tokens are sent via header, not cookies,
+  // so credentials don't need to be enabled. X-Next-Cursor must be
+  // exposed explicitly — browsers hide non-simple response headers by
+  // default (API_DESIGN.md §5's pagination cursor lives there).
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+    exposedHeaders: ['X-Next-Cursor'],
+  });
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
   app.useGlobalPipes(

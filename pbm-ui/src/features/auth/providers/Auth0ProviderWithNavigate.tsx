@@ -29,6 +29,11 @@ function Auth0ProviderWithNavigate({ children }: { children: ReactNode }) {
         redirect_uri: `${window.location.origin}/callback`,
         audience,
       }}
+      // Default cacheLocation ("memory") loses the session on every full
+      // page reload — confirmed live (DECISIONS.md ADR-011). localStorage
+      // persists the cached token across reloads without depending on a
+      // refresh-token grant this Auth0 client may not have enabled.
+      cacheLocation="localstorage"
       onRedirectCallback={onRedirectCallback}
     >
       {children}

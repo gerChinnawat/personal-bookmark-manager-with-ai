@@ -1,7 +1,6 @@
 export interface Collection {
   id: string
   name: string
-  count: number
+  createdAt: string
   updatedAt: string
-  colorSwatches: string[]
 }

@@ -217,3 +217,33 @@ identity-related backend endpoint. Anyone running `scripts/get-token.mjs` must n
 that fixed callback.
 
 ---
+
+## ADR-011: Enable CORS on pbm-service for the pbm-ui origin; persist the Auth0 session in localStorage
+Date: 2026-07-28
+Status: Accepted
+Summary: `pbm-service` now calls `app.enableCors(...)` scoped to the `pbm-ui` dev origin
+(`http://localhost:3000` by default, overridable via `CORS_ORIGIN`) with `X-Next-Cursor`
+exposed; `pbm-ui`'s `Auth0Provider` sets `cacheLocation="localstorage"` instead of the
+default in-memory cache.
+
+**Context:** Binding the real Collections API into `pbm-ui` surfaced two live bugs, found by
+actually running both apps together rather than just typechecking: (1) every request from
+the Vite dev server (`:3000`) to the API (`:3001`) failed — the browser's CORS preflight
+(`OPTIONS /collections`) hit no CORS middleware and got a bare 404, so the browser blocked
+the real request before it ever reached the auth guard; (2) the Auth0 SDK's default
+`cacheLocation: "memory"` meant every full page reload (or even just re-navigating to a
+route) silently logged the user out, since there was no cached token to fall back to and no
+refresh-token grant confirmed enabled on this Auth0 client.
+
+**Decision:** Enabled CORS on the API for exactly the `pbm-ui` origin (not a wildcard),
+exposing only the one custom header the frontend actually reads. Switched the SPA's token
+cache to `localStorage` so a reload finds the previously-issued access token instead of
+bouncing to `/login`.
+
+**Consequences:** `CORS_ORIGIN` must be set in `pbm-service/.env` if `pbm-ui` is ever served
+from a different origin than `localhost:3000`. Storing the access token in `localStorage`
+(vs. memory-only) is a known XSS-exposure trade-off Auth0 documents for exactly this
+reload-persistence case; revisit if this app ever needs a stricter token-storage posture
+(e.g. a real refresh-token rotation setup with `useRefreshTokens` + memory cache).
+
+---

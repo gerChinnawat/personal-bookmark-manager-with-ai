@@ -43,23 +43,8 @@ function CollectionCard({ collection, onOpen, onShare }: CollectionCardProps) {
       </Box>
 
       <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
-        {collection.count} {collection.count === 1 ? 'bookmark' : 'bookmarks'} · Updated{' '}
-        {formatRelativeTime(collection.updatedAt)}
+        Updated {formatRelativeTime(collection.updatedAt)}
       </Typography>
-
-      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-        {collection.colorSwatches.map((color, index) => (
-          <Box
-            key={`${collection.id}-swatch-${index}`}
-            sx={{
-              width: 16,
-              height: 6,
-              borderRadius: '2px',
-              bgcolor: color,
-            }}
-          />
-        ))}
-      </Box>
     </Card>
   )
 }
