@@ -53,9 +53,7 @@ transcripts/   Raw session logs (auto-saved via .claude/hooks/save_transcript.py
 | `AI_WORKFLOW.md` | How this repo was actually built with coding agents, including failures and how they were caught/recovered |
 | `CLAUDE.md` | Rules the coding agent must follow while implementing this repo (repository-layer access, `ownerId` handling, etc.) |
 
-## Scope: completed vs skipped
-
-### Completed
+## Scope: completed
 
 - **`pbm-service`**: full CRUD on `Collection` and `Bookmark` (including `PUT` full-replace
   semantics), `GET /me`, `GET /collections/:id/bookmarks`, list filtering/pagination
