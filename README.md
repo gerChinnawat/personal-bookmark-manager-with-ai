@@ -71,6 +71,24 @@ is reserved for the `pbm-ui` dev server, since Auth0's app config has a fixed SP
 of `http://localhost:3000/callback` (see `DECISIONS.md` ADR-010).
 Security matrix test: `npm run test:security` (Postgres must be up).
 
+### Running `pbm-ui`
+
+`pbm-service` must already be running (above) — the UI has nothing to call against
+otherwise.
+
+```
+cd pbm-ui
+cp .env.example .env   # fill in Auth0 domain/client id, see pbm-ui/README.md
+npm install
+npm run dev            # http://localhost:3000
+```
+
+The dev server is fixed to port `3000` to match Auth0's SPA callback
+(`http://localhost:3000/callback`, `DECISIONS.md` ADR-010) — running it on another port
+breaks the login redirect. Opening `http://localhost:3000` redirects to `/login`; a
+successful Auth0 login lands on `/collections`. See `pbm-ui/README.md` for the full
+environment variable table and project structure.
+
 `pbm-ui` tests: `cd pbm-ui && npm install && npm run test:run` (Vitest + React Testing
 Library; no backend or Postgres required — services are mocked).
 
